@@ -1,12 +1,16 @@
 export interface EmbeddedTerminalThread {
   id: string;
   providerId: string;
+  profileName: string;
+  launchEnv?: Record<string, string>;
   projectPath: string;
 }
 
 export interface EmbeddedTerminalNewThreadLaunch {
   launchId: number;
   providerId: string;
+  profileName: string;
+  launchEnv?: Record<string, string>;
   projectPath: string;
   knownThreadIds: string[];
 }
@@ -56,6 +60,8 @@ export type SessionLaunchTarget =
       key: string;
       threadId: string;
       providerId: string;
+      profileName: string;
+      launchEnv?: Record<string, string>;
       projectPath: string;
     }
   | {
@@ -63,6 +69,8 @@ export type SessionLaunchTarget =
       key: string;
       launchId: number;
       providerId: string;
+      profileName: string;
+      launchEnv?: Record<string, string>;
       projectPath: string;
       knownThreadIds: string[];
     };

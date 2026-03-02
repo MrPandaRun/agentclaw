@@ -114,8 +114,17 @@ mod tests {
 
     #[test]
     fn maps_health_status_to_snake_case_string() {
-        assert_eq!(health_status_as_str(ProviderHealthStatus::Healthy), "healthy");
-        assert_eq!(health_status_as_str(ProviderHealthStatus::Degraded), "degraded");
-        assert_eq!(health_status_as_str(ProviderHealthStatus::Offline), "offline");
+        assert_eq!(
+            health_status_as_str(ProviderHealthStatus::Healthy),
+            "healthy"
+        );
+        assert_eq!(
+            health_status_as_str(ProviderHealthStatus::Degraded),
+            "degraded"
+        );
+        assert_eq!(
+            health_status_as_str(ProviderHealthStatus::Offline),
+            "offline"
+        );
     }
 }

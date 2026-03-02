@@ -27,9 +27,17 @@ static EMBEDDED_TERMINAL_COUNTER: AtomicU64 = AtomicU64::new(1);
 pub fn open_thread_in_terminal(
     provider_id: ProviderId,
     thread_id: &str,
+    profile_name: Option<&str>,
+    env: Option<HashMap<String, String>>,
     project_path: Option<&str>,
 ) -> Result<OpenThreadInTerminalResponse, String> {
-    let command = build_resume_command_from_parts(provider_id, thread_id, project_path);
+    let command = build_resume_command_from_parts(
+        provider_id,
+        thread_id,
+        profile_name,
+        env.as_ref(),
+        project_path,
+    );
     launch_in_terminal(&command)?;
     Ok(OpenThreadInTerminalResponse {
         launched: true,
@@ -40,9 +48,12 @@ pub fn open_thread_in_terminal(
 
 pub fn open_new_thread_in_terminal(
     provider_id: ProviderId,
+    profile_name: Option<&str>,
+    env: Option<HashMap<String, String>>,
     project_path: Option<&str>,
 ) -> Result<OpenThreadInTerminalResponse, String> {
-    let command = build_new_thread_command_from_parts(provider_id, project_path);
+    let command =
+        build_new_thread_command_from_parts(provider_id, profile_name, env.as_ref(), project_path);
     launch_in_terminal(&command)?;
     Ok(OpenThreadInTerminalResponse {
         launched: true,
@@ -74,6 +85,8 @@ pub fn start_embedded_terminal(
     app: tauri::AppHandle,
     provider_id: ProviderId,
     thread_id: &str,
+    profile_name: Option<&str>,
+    env: Option<HashMap<String, String>>,
     project_path: Option<&str>,
     terminal_theme: Option<&str>,
     cols: Option<u16>,
@@ -81,7 +94,13 @@ pub fn start_embedded_terminal(
 ) -> Result<StartEmbeddedTerminalResponse, String> {
     let cols = clamp_terminal_cols(cols);
     let rows = clamp_terminal_rows(rows);
-    let command = build_resume_command_from_parts(provider_id, thread_id, project_path);
+    let command = build_resume_command_from_parts(
+        provider_id,
+        thread_id,
+        profile_name,
+        env.as_ref(),
+        project_path,
+    );
     let session_id = next_embedded_terminal_session_id();
     let (reader, session) = create_embedded_session(&command, terminal_theme, cols, rows)?;
     terminal_sessions()
@@ -101,6 +120,8 @@ pub fn start_embedded_terminal(
 pub fn start_new_embedded_terminal(
     app: tauri::AppHandle,
     provider_id: ProviderId,
+    profile_name: Option<&str>,
+    env: Option<HashMap<String, String>>,
     project_path: Option<&str>,
     terminal_theme: Option<&str>,
     cols: Option<u16>,
@@ -108,7 +129,8 @@ pub fn start_new_embedded_terminal(
 ) -> Result<StartEmbeddedTerminalResponse, String> {
     let cols = clamp_terminal_cols(cols);
     let rows = clamp_terminal_rows(rows);
-    let command = build_new_thread_command_from_parts(provider_id, project_path);
+    let command =
+        build_new_thread_command_from_parts(provider_id, profile_name, env.as_ref(), project_path);
     let session_id = next_embedded_terminal_session_id();
     let (reader, session) = create_embedded_session(&command, terminal_theme, cols, rows)?;
     terminal_sessions()
@@ -400,13 +422,16 @@ fn remove_embedded_terminal_session(session_id: &str) -> Option<Arc<EmbeddedTerm
 fn build_resume_command_from_parts(
     provider_id: ProviderId,
     thread_id: &str,
+    profile_name: Option<&str>,
+    env: Option<&HashMap<String, String>>,
     project_path: Option<&str>,
 ) -> String {
-    let resume = match provider_id {
+    let resume_base = match provider_id {
         ProviderId::ClaudeCode => format!("claude --resume {}", shell_quote(thread_id)),
         ProviderId::Codex => format!("codex resume {}", shell_quote(thread_id)),
         ProviderId::OpenCode => format!("opencode --session {}", shell_quote(thread_id)),
     };
+    let resume = apply_env_and_profile_to_command(resume_base, env, profile_name);
 
     let project_path = project_path
         .map(str::trim)
@@ -421,13 +446,16 @@ fn build_resume_command_from_parts(
 
 fn build_new_thread_command_from_parts(
     provider_id: ProviderId,
+    profile_name: Option<&str>,
+    env: Option<&HashMap<String, String>>,
     project_path: Option<&str>,
 ) -> String {
-    let start = match provider_id {
+    let start_base = match provider_id {
         ProviderId::ClaudeCode => "claude".to_string(),
         ProviderId::Codex => "codex".to_string(),
         ProviderId::OpenCode => "opencode".to_string(),
     };
+    let start = apply_env_and_profile_to_command(start_base, env, profile_name);
 
     let project_path = project_path
         .map(str::trim)
@@ -438,6 +466,47 @@ fn build_new_thread_command_from_parts(
     }
 
     start
+}
+
+fn apply_env_and_profile_to_command(
+    command: String,
+    env: Option<&HashMap<String, String>>,
+    profile_name: Option<&str>,
+) -> String {
+    let mut entries = Vec::new();
+    if let Some(env) = env {
+        let mut keys = env.keys().collect::<Vec<_>>();
+        keys.sort();
+        for key in keys {
+            let key_trimmed = key.trim();
+            if key_trimmed.is_empty() {
+                continue;
+            }
+            if let Some(value) = env.get(key) {
+                entries.push((key_trimmed.to_string(), value.to_string()));
+            }
+        }
+    }
+    let profile_name = profile_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if let Some(profile_name) = profile_name {
+        entries.push((
+            "AGENTDOCK_ACTIVE_PROFILE".to_string(),
+            profile_name.to_string(),
+        ));
+    }
+
+    if entries.is_empty() {
+        return command;
+    }
+
+    let prefix = entries
+        .iter()
+        .map(|(key, value)| format!("{key}={}", shell_quote(value)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("{prefix} {command}")
 }
 
 fn build_happy_command_from_parts(
@@ -492,7 +561,10 @@ fn ensure_command_available(command: &str, command_label: &str) -> Result<(), St
 fn command_available(command: &str) -> Result<bool, String> {
     let output = Command::new("sh")
         .arg("-lc")
-        .arg(format!("command -v {} >/dev/null 2>&1", shell_quote(command)))
+        .arg(format!(
+            "command -v {} >/dev/null 2>&1",
+            shell_quote(command)
+        ))
         .output()
         .map_err(|error| format!("Failed to check command availability: {error}"))?;
     Ok(output.status.success())
@@ -534,6 +606,8 @@ fn shell_quote(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use provider_contract::ProviderId;
 
     use super::{
@@ -546,6 +620,8 @@ mod tests {
         let command = build_resume_command_from_parts(
             ProviderId::ClaudeCode,
             "thread id",
+            None,
+            None,
             Some("/tmp/my project"),
         );
         assert_eq!(
@@ -556,8 +632,50 @@ mod tests {
 
     #[test]
     fn build_new_thread_command_supports_provider_without_project_path() {
-        let command = build_new_thread_command_from_parts(ProviderId::OpenCode, None);
+        let command = build_new_thread_command_from_parts(ProviderId::OpenCode, None, None, None);
         assert_eq!(command, "opencode");
+    }
+
+    #[test]
+    fn build_resume_command_includes_profile_env_when_provided() {
+        let command = build_resume_command_from_parts(
+            ProviderId::Codex,
+            "thread-id",
+            Some("work"),
+            None,
+            None,
+        );
+        assert_eq!(
+            command,
+            "AGENTDOCK_ACTIVE_PROFILE='work' codex resume 'thread-id'"
+        );
+    }
+
+    #[test]
+    fn build_new_thread_command_includes_profile_env_when_provided() {
+        let command =
+            build_new_thread_command_from_parts(ProviderId::ClaudeCode, Some("demo"), None, None);
+        assert_eq!(command, "AGENTDOCK_ACTIVE_PROFILE='demo' claude");
+    }
+
+    #[test]
+    fn build_new_thread_command_includes_custom_env_variables() {
+        let mut env = HashMap::new();
+        env.insert("OPENAI_API_KEY".to_string(), "sk-test".to_string());
+        env.insert(
+            "OPENAI_BASE_URL".to_string(),
+            "https://proxy.example.com".to_string(),
+        );
+        let command = build_new_thread_command_from_parts(
+            ProviderId::Codex,
+            Some("team-profile"),
+            Some(&env),
+            None,
+        );
+        assert_eq!(
+            command,
+            "OPENAI_API_KEY='sk-test' OPENAI_BASE_URL='https://proxy.example.com' AGENTDOCK_ACTIVE_PROFILE='team-profile' codex"
+        );
     }
 
     #[test]

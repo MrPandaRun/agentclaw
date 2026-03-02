@@ -140,6 +140,8 @@ export function useTerminalSessionLifecycle({
                 request: {
                   threadId: launchTarget.threadId,
                   providerId: launchTarget.providerId,
+                  profileName: launchTarget.profileName,
+                  env: launchTarget.launchEnv,
                   projectPath: launchTarget.projectPath,
                   terminalTheme,
                   cols: Math.max(40, terminal.cols || 120),
@@ -149,6 +151,8 @@ export function useTerminalSessionLifecycle({
             : await invoke<StartEmbeddedTerminalResponse>("start_new_embedded_terminal", {
                 request: {
                   providerId: launchTarget.providerId,
+                  profileName: launchTarget.profileName,
+                  env: launchTarget.launchEnv,
                   projectPath: launchTarget.projectPath,
                   terminalTheme,
                   cols: Math.max(40, terminal.cols || 120),
@@ -200,6 +204,8 @@ export function useTerminalSessionLifecycle({
             launch: {
               launchId: launchTarget.launchId,
               providerId: launchTarget.providerId,
+              profileName: launchTarget.profileName,
+              launchEnv: launchTarget.launchEnv,
               projectPath: launchTarget.projectPath,
               knownThreadIds: launchTarget.knownThreadIds,
             },

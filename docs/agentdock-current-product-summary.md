@@ -76,6 +76,9 @@ Thread text behavior:
 - Header title uses selected thread `title`.
 - Create Thread dialog displays per-agent install status (`installed` + `health_status`) before launch.
 - If a selected agent CLI is missing, Create is blocked and install guidance is shown.
+- Settings provide active `Agent` plus per-agent supplier management (official + third-party), persisted in desktop local storage.
+- Each supplier supports profile, API base/key fields, and optional config JSON (`env`) overrides.
+- Embedded terminal launch requests carry `profile_name` and supplier env values, injecting them into CLI command context.
 
 Consistency intent:
 - Agent adapters should produce stable, agent-official `title` whenever available.

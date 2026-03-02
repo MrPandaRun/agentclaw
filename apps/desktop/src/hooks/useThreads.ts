@@ -22,6 +22,8 @@ export interface ThreadFolderGroupItem<T extends AgentThreadSummary = AgentThrea
 export interface EmbeddedTerminalNewThreadLaunch {
   launchId: number;
   providerId: string;
+  profileName: string;
+  launchEnv?: Record<string, string>;
   projectPath: string;
   knownThreadIds: string[];
 }
@@ -47,7 +49,12 @@ export interface UseThreadsResult {
   setError: (error: string | null) => void;
   loadThreads: () => Promise<void>;
   handleSelectThread: (threadId: string) => void;
-  handleCreateThreadInFolder: (projectPath: string, providerId: ThreadProviderId) => Promise<void>;
+  handleCreateThreadInFolder: (
+    projectPath: string,
+    providerId: ThreadProviderId,
+    profileName: string,
+    launchEnv?: Record<string, string>,
+  ) => Promise<void>;
   handleNewThreadLaunchSettled: (payload: EmbeddedTerminalLaunchSettledPayload) => void;
   handleEmbeddedTerminalSessionExit: () => void;
 }
@@ -167,7 +174,12 @@ export function useThreads(): UseThreadsResult {
   );
 
   const handleCreateThreadInFolder = useCallback(
-    async (projectPath: string, providerId: ThreadProviderId) => {
+    async (
+      projectPath: string,
+      providerId: ThreadProviderId,
+      profileName: string,
+      launchEnv?: Record<string, string>,
+    ) => {
       const launchId = Date.now();
       setCreatingThreadFolderKey(projectPath);
       setError(null);
@@ -176,6 +188,8 @@ export function useThreads(): UseThreadsResult {
       setNewThreadLaunch({
         launchId,
         providerId,
+        profileName,
+        launchEnv,
         projectPath,
         knownThreadIds: threads.map((thread) => thread.id),
       });

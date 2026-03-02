@@ -52,6 +52,14 @@ interface UseEmbeddedTerminalControllerResult {
 const SESSION_BUFFER_MAX_CHARS = 800_000;
 const HAPPY_GITHUB_URL = "https://github.com/slopus/happy";
 
+function envSignature(env?: Record<string, string>): string {
+  if (!env) {
+    return "";
+  }
+  const entries = Object.entries(env).sort(([a], [b]) => a.localeCompare(b));
+  return entries.map(([key, value]) => `${key}=${value}`).join(";");
+}
+
 export function useEmbeddedTerminalController({
   thread,
   terminalTheme,
@@ -84,23 +92,29 @@ export function useEmbeddedTerminalController({
   const activeTheme = TERMINAL_THEMES[terminalTheme];
   const threadId = thread?.id ?? null;
   const threadProviderId = thread?.providerId ?? null;
+  const threadProfileName = thread?.profileName ?? null;
+  const threadLaunchEnv = thread?.launchEnv;
+  const threadLaunchEnvSignature = useMemo(() => envSignature(threadLaunchEnv), [threadLaunchEnv]);
   const threadProjectPath = thread?.projectPath ?? null;
   const launchRequestId = launchRequest?.launchId ?? null;
   const launchRequestProviderId = launchRequest?.providerId ?? null;
+  const launchRequestProfileName = launchRequest?.profileName ?? null;
+  const launchRequestLaunchEnv = launchRequest?.launchEnv;
   const launchRequestProjectPath = launchRequest?.projectPath ?? null;
   const launchRequestKnownThreadIds = launchRequest?.knownThreadIds ?? null;
 
   const threadKey = useMemo(() => {
-    if (!threadId || !threadProviderId || !threadProjectPath) {
+    if (!threadId || !threadProviderId || !threadProfileName || !threadProjectPath) {
       return null;
     }
-    return `${threadProviderId}:${threadId}:${threadProjectPath}`;
-  }, [threadId, threadProjectPath, threadProviderId]);
+    return `${threadProviderId}:${threadProfileName}:${threadId}:${threadProjectPath}:${threadLaunchEnvSignature}`;
+  }, [threadId, threadLaunchEnvSignature, threadProfileName, threadProjectPath, threadProviderId]);
 
   const launchTarget = useMemo<SessionLaunchTarget | null>(() => {
     if (
       launchRequestId !== null &&
       launchRequestProviderId &&
+      launchRequestProfileName &&
       launchRequestProjectPath &&
       launchRequestKnownThreadIds
     ) {
@@ -109,11 +123,13 @@ export function useEmbeddedTerminalController({
         key: `new:${launchRequestId}`,
         launchId: launchRequestId,
         providerId: launchRequestProviderId,
+        profileName: launchRequestProfileName,
+        launchEnv: launchRequestLaunchEnv,
         projectPath: launchRequestProjectPath,
         knownThreadIds: launchRequestKnownThreadIds,
       };
     }
-    if (!threadId || !threadProviderId || !threadProjectPath || !threadKey) {
+    if (!threadId || !threadProviderId || !threadProfileName || !threadProjectPath || !threadKey) {
       return null;
     }
     return {
@@ -121,15 +137,21 @@ export function useEmbeddedTerminalController({
       key: threadKey,
       threadId,
       providerId: threadProviderId,
+      profileName: threadProfileName,
+      launchEnv: threadLaunchEnv,
       projectPath: threadProjectPath,
     };
   }, [
     launchRequestId,
     launchRequestKnownThreadIds,
+    launchRequestLaunchEnv,
+    launchRequestProfileName,
     launchRequestProjectPath,
     launchRequestProviderId,
     threadId,
     threadKey,
+    threadLaunchEnv,
+    threadProfileName,
     threadProjectPath,
     threadProviderId,
   ]);

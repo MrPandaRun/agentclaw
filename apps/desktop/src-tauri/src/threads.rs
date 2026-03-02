@@ -126,7 +126,6 @@ fn map_opencode_thread_overview(overview: OpenCodeThreadOverview) -> ThreadSumma
     }
 }
 
-
 fn map_codex_thread_runtime_state(
     state: CodexThreadRuntimeState,
 ) -> CodexThreadRuntimeStatePayload {

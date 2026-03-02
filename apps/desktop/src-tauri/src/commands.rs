@@ -1,18 +1,16 @@
 use provider_contract::ProviderId;
 
 use crate::payloads::{
-    ClaudeThreadRuntimeStatePayload, CloseEmbeddedTerminalRequest, CodexThreadRuntimeStatePayload,
-    GetClaudeThreadRuntimeStateRequest, GetCodexThreadRuntimeStateRequest,
-    GetOpenCodeThreadRuntimeStateRequest,
+    CcSwitchImportPayload, ClaudeThreadRuntimeStatePayload, CloseEmbeddedTerminalRequest,
+    CodexThreadRuntimeStatePayload, GetClaudeThreadRuntimeStateRequest,
+    GetCodexThreadRuntimeStateRequest, GetOpenCodeThreadRuntimeStateRequest,
     OpenCodeThreadRuntimeStatePayload, OpenNewThreadInTerminalRequest, OpenThreadInHappyRequest,
-    OpenThreadInTerminalRequest, OpenThreadInTerminalResponse, ResizeEmbeddedTerminalRequest,
-    ProviderInstallStatusPayload,
-    StartEmbeddedTerminalRequest, StartEmbeddedTerminalResponse,
-    StartNewEmbeddedTerminalRequest, ThreadSummaryPayload,
-    WriteEmbeddedTerminalInputRequest,
+    OpenThreadInTerminalRequest, OpenThreadInTerminalResponse, ProviderInstallStatusPayload,
+    ResizeEmbeddedTerminalRequest, StartEmbeddedTerminalRequest, StartEmbeddedTerminalResponse,
+    StartNewEmbeddedTerminalRequest, ThreadSummaryPayload, WriteEmbeddedTerminalInputRequest,
 };
 use crate::provider_id::parse_provider_id;
-use crate::{provider_health, terminal, threads};
+use crate::{ccswitch, provider_health, terminal, threads};
 
 #[tauri::command]
 pub async fn list_threads(
@@ -34,6 +32,12 @@ pub async fn list_provider_install_statuses(
     .map_err(|error| format!("Failed to load provider install statuses: {error}"))?
 }
 
+#[tauri::command]
+pub async fn import_ccswitch_suppliers() -> Result<CcSwitchImportPayload, String> {
+    tauri::async_runtime::spawn_blocking(ccswitch::import_suppliers_from_ccswitch)
+        .await
+        .map_err(|error| format!("Failed to import CC Switch suppliers: {error}"))?
+}
 
 #[tauri::command]
 pub async fn get_codex_thread_runtime_state(
@@ -68,17 +72,25 @@ pub async fn get_opencode_thread_runtime_state(
     .map_err(|error| format!("Failed to load OpenCode runtime state: {error}"))?
 }
 
-
 #[tauri::command]
 pub async fn open_thread_in_terminal(
     request: OpenThreadInTerminalRequest,
 ) -> Result<OpenThreadInTerminalResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let provider_id = parse_provider_for_terminal_launch(&request.provider_id)?;
+        let OpenThreadInTerminalRequest {
+            thread_id,
+            provider_id,
+            profile_name,
+            env,
+            project_path,
+        } = request;
+        let provider_id = parse_provider_for_terminal_launch(&provider_id)?;
         terminal::open_thread_in_terminal(
             provider_id,
-            &request.thread_id,
-            request.project_path.as_deref(),
+            &thread_id,
+            profile_name.as_deref(),
+            env,
+            project_path.as_deref(),
         )
     })
     .await
@@ -91,7 +103,11 @@ pub async fn open_thread_in_happy(
 ) -> Result<OpenThreadInTerminalResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let provider_id = parse_provider_for_happy_launch(&request.provider_id)?;
-        terminal::open_thread_in_happy(provider_id, request.thread_id.as_deref(), request.project_path.as_deref())
+        terminal::open_thread_in_happy(
+            provider_id,
+            request.thread_id.as_deref(),
+            request.project_path.as_deref(),
+        )
     })
     .await
     .map_err(|error| format!("Failed to open Happy integration: {error}"))?
@@ -109,8 +125,19 @@ pub async fn open_new_thread_in_terminal(
     request: OpenNewThreadInTerminalRequest,
 ) -> Result<OpenThreadInTerminalResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let provider_id = parse_provider_for_new_thread_launch(&request.provider_id)?;
-        terminal::open_new_thread_in_terminal(provider_id, request.project_path.as_deref())
+        let OpenNewThreadInTerminalRequest {
+            provider_id,
+            profile_name,
+            env,
+            project_path,
+        } = request;
+        let provider_id = parse_provider_for_new_thread_launch(&provider_id)?;
+        terminal::open_new_thread_in_terminal(
+            provider_id,
+            profile_name.as_deref(),
+            env,
+            project_path.as_deref(),
+        )
     })
     .await
     .map_err(|error| format!("Failed to open new thread terminal session: {error}"))?
@@ -122,15 +149,27 @@ pub async fn start_embedded_terminal(
     request: StartEmbeddedTerminalRequest,
 ) -> Result<StartEmbeddedTerminalResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let provider_id = parse_provider_for_terminal_launch(&request.provider_id)?;
+        let StartEmbeddedTerminalRequest {
+            thread_id,
+            provider_id,
+            profile_name,
+            env,
+            project_path,
+            terminal_theme,
+            cols,
+            rows,
+        } = request;
+        let provider_id = parse_provider_for_terminal_launch(&provider_id)?;
         terminal::start_embedded_terminal(
             app,
             provider_id,
-            &request.thread_id,
-            request.project_path.as_deref(),
-            request.terminal_theme.as_deref(),
-            request.cols,
-            request.rows,
+            &thread_id,
+            profile_name.as_deref(),
+            env,
+            project_path.as_deref(),
+            terminal_theme.as_deref(),
+            cols,
+            rows,
         )
     })
     .await
@@ -143,14 +182,25 @@ pub async fn start_new_embedded_terminal(
     request: StartNewEmbeddedTerminalRequest,
 ) -> Result<StartEmbeddedTerminalResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let provider_id = parse_provider_for_new_thread_launch(&request.provider_id)?;
+        let StartNewEmbeddedTerminalRequest {
+            provider_id,
+            profile_name,
+            env,
+            project_path,
+            terminal_theme,
+            cols,
+            rows,
+        } = request;
+        let provider_id = parse_provider_for_new_thread_launch(&provider_id)?;
         terminal::start_new_embedded_terminal(
             app,
             provider_id,
-            request.project_path.as_deref(),
-            request.terminal_theme.as_deref(),
-            request.cols,
-            request.rows,
+            profile_name.as_deref(),
+            env,
+            project_path.as_deref(),
+            terminal_theme.as_deref(),
+            cols,
+            rows,
         )
     })
     .await
@@ -188,7 +238,6 @@ pub async fn close_embedded_terminal(request: CloseEmbeddedTerminalRequest) -> R
     .map_err(|error| format!("Failed to close embedded terminal: {error}"))?
 }
 
-
 fn parse_provider_for_terminal_launch(raw: &str) -> Result<ProviderId, String> {
     parse_provider_id(raw).map_err(|_| format!("Unsupported provider for terminal launch: {raw}"))
 }
@@ -202,8 +251,8 @@ fn parse_provider_for_happy_launch(raw: &str) -> Result<ProviderId, String> {
         .map_err(|_| format!("Unsupported provider for Happy integration: {raw}"))?;
     match provider_id {
         ProviderId::ClaudeCode | ProviderId::Codex => Ok(provider_id),
-        ProviderId::OpenCode => Err(
-            "Happy integration currently supports claude_code and codex only".to_string(),
-        ),
+        ProviderId::OpenCode => {
+            Err("Happy integration currently supports claude_code and codex only".to_string())
+        }
     }
 }

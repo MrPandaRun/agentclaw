@@ -25,3 +25,5 @@ provider-codex = { path = "../../../crates/provider-codex" }
 provider-opencode = { path = "../../../crates/provider-opencode" }
 portable-pty = "0.8"
 serde = { workspace = true }
+serde_json = { workspace = true }
+rusqlite = { workspace = true }

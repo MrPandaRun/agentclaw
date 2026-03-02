@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
@@ -21,6 +23,26 @@ pub struct ProviderInstallStatusPayload {
     pub message: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CcSwitchImportedSupplierPayload {
+    pub provider_id: String,
+    pub source_id: String,
+    pub name: String,
+    pub note: Option<String>,
+    pub profile_name: String,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub config_json: Option<String>,
+    pub is_current: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CcSwitchImportPayload {
+    pub db_path: String,
+    pub suppliers: Vec<CcSwitchImportedSupplierPayload>,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,13 +86,13 @@ pub struct OpenCodeThreadRuntimeStatePayload {
     pub last_event_at_ms: Option<i64>,
 }
 
-
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenThreadInTerminalRequest {
     pub thread_id: String,
     pub provider_id: String,
+    pub profile_name: Option<String>,
+    pub env: Option<HashMap<String, String>>,
     pub project_path: Option<String>,
 }
 
@@ -86,6 +108,8 @@ pub struct OpenThreadInHappyRequest {
 #[serde(rename_all = "camelCase")]
 pub struct OpenNewThreadInTerminalRequest {
     pub provider_id: String,
+    pub profile_name: Option<String>,
+    pub env: Option<HashMap<String, String>>,
     pub project_path: Option<String>,
 }
 
@@ -102,6 +126,8 @@ pub struct OpenThreadInTerminalResponse {
 pub struct StartEmbeddedTerminalRequest {
     pub thread_id: String,
     pub provider_id: String,
+    pub profile_name: Option<String>,
+    pub env: Option<HashMap<String, String>>,
     pub project_path: Option<String>,
     pub terminal_theme: Option<String>,
     pub cols: Option<u16>,
@@ -112,6 +138,8 @@ pub struct StartEmbeddedTerminalRequest {
 #[serde(rename_all = "camelCase")]
 pub struct StartNewEmbeddedTerminalRequest {
     pub provider_id: String,
+    pub profile_name: Option<String>,
+    pub env: Option<HashMap<String, String>>,
     pub project_path: Option<String>,
     pub terminal_theme: Option<String>,
     pub cols: Option<u16>,

@@ -1,3 +1,4 @@
+mod ccswitch;
 mod commands;
 mod path_env;
 mod payloads;
@@ -19,6 +20,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_threads,
             commands::list_provider_install_statuses,
+            commands::import_ccswitch_suppliers,
             commands::get_claude_thread_runtime_state,
             commands::get_codex_thread_runtime_state,
             commands::get_opencode_thread_runtime_state,
