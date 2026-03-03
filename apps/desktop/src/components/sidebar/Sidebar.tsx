@@ -14,6 +14,7 @@ import {
   Loader2,
   Monitor,
   Moon,
+  Package,
   Plus,
   RefreshCw,
   Settings2,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { SkillsPanel } from "@/components/skills/SkillsPanel";
 import {
   ThreadFolderGroup,
   type ThreadFolderGroupItem,
@@ -1346,6 +1348,7 @@ export function Sidebar({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+  const [skillsDialogOpen, setSkillsDialogOpen] = useState(false);
   const [pendingTheme, setPendingTheme] = useState<AppTheme>(appTheme);
   const [pendingActiveProviderId, setPendingActiveProviderId] =
     useState<ThreadProviderId>(activeProviderId);
@@ -2195,6 +2198,22 @@ export function Sidebar({
                     <ChevronRight className="h-3.5 w-3.5" />
                   </span>
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-full items-center justify-between px-2.5 text-xs"
+                  onClick={() => {
+                    setSkillsDialogOpen(true);
+                    setSettingsOpen(false);
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Package className="h-3.5 w-3.5" />
+                    Skills
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
               </div>
             ) : null}
           </div>
@@ -2951,6 +2970,28 @@ export function Sidebar({
               <p className="text-[11px] text-muted-foreground">
                 Current: {pendingThemeOption?.label ?? "Light"}
               </p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {skillsDialogOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+          onClick={() => setSkillsDialogOpen(false)}
+        >
+          <Card
+            className="w-full max-w-md border border-border bg-card opacity-100 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Skills</CardTitle>
+              <CardDescription className="text-xs">
+                Manage installed skills for agent providers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SkillsPanel appTheme={appTheme} />
             </CardContent>
           </Card>
         </div>
