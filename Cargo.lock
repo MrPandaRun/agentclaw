@@ -33,7 +33,7 @@ dependencies = [
 
 [[package]]
 name = "agentdock-desktop"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "agentdock-core",
  "chrono",
