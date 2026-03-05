@@ -19,9 +19,12 @@ import type {
   DiscoverableSkill,
   DiscoverSkillInstallProgress,
   Skill,
+  SkillEnabledState,
   SkillRepo,
 } from "@/types";
 
+import antigravityIconPng from "@/assets/providers/antigravity.png";
+import { ProviderIcon } from "@/components/provider/ProviderIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,8 +41,9 @@ interface SkillsPanelProps {
 }
 
 const PROVIDERS = [
-  { id: "claude_code", label: "Claude" },
+  { id: "claude_code", label: "Claude Code" },
   { id: "codex", label: "Codex" },
+  { id: "antigravity", label: "Antigravity" },
   { id: "opencode", label: "OpenCode" },
 ] as const;
 
@@ -731,7 +735,7 @@ interface InstalledTabProps {
   onUninstall: (skill: Skill) => void;
   togglingSkillId: string | null;
   uninstallingSkillId: string | null;
-  getEnabledState: (skill: Skill) => { claude_code: boolean; codex: boolean; opencode: boolean };
+  getEnabledState: (skill: Skill) => SkillEnabledState;
   isSkillEnabledForProvider: (skill: Skill, provider: string) => boolean;
 }
 
@@ -860,11 +864,13 @@ function InstalledTab({
                     return (
                       <Button
                         key={provider.id}
-                        variant={isEnabled ? "default" : "outline"}
+                        variant="ghost"
                         size="sm"
                         className={cn(
-                          "h-5 px-1.5 text-[9px]",
-                          isEnabled && "bg-primary text-primary-foreground"
+                          "h-6 w-6 rounded-md border p-0",
+                          isEnabled
+                            ? "border-primary/60 bg-primary/10 text-foreground"
+                            : "border-border/60 text-muted-foreground opacity-60 hover:opacity-100"
                         )}
                         onClick={() =>
                           void onToggleProvider(skill, provider.id, !isEnabled)
@@ -875,7 +881,17 @@ function InstalledTab({
                         {isToggling ? (
                           <Loader2 className="h-2.5 w-2.5 animate-spin" />
                         ) : (
-                          provider.label
+                          <span className="inline-flex items-center justify-center">
+                            {provider.id === "antigravity" ? (
+                              <img
+                                src={antigravityIconPng}
+                                alt="Antigravity"
+                                className="h-3.5 w-3.5 rounded-sm"
+                              />
+                            ) : (
+                              <ProviderIcon providerId={provider.id} className="h-3.5 w-3.5" />
+                            )}
+                          </span>
                         )}
                       </Button>
                     );

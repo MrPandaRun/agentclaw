@@ -83,6 +83,7 @@ export interface SkillEnabledState {
   claude_code: boolean;
   codex: boolean;
   opencode: boolean;
+  antigravity: boolean;
 }
 
 export interface Skill {

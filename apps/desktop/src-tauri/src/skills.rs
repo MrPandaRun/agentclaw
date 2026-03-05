@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
@@ -46,6 +47,8 @@ pub struct SkillsContext {
     pub skills_dir: PathBuf,
 }
 
+static CODEX_SKILLS_MIGRATION_ONCE: OnceLock<()> = OnceLock::new();
+
 impl SkillsContext {
     pub fn from_app_handle(app: &tauri::AppHandle) -> Result<Self, String> {
         let app_data_dir = app
@@ -82,13 +85,12 @@ pub fn list_skills_cmd(ctx: &SkillsContext) -> Result<Vec<Skill>, String> {
     let db_skills = list_skills(&conn).map_err(|e| format!("Failed to list skills: {e}"))?;
 
     // Create a map to track skills and their enabled providers
-    let mut skills_map: std::collections::HashMap<String, Skill> = db_skills
-        .into_iter()
-        .map(|s| (s.id.clone(), s))
-        .collect();
+    let mut skills_map: std::collections::HashMap<String, Skill> =
+        db_skills.into_iter().map(|s| (s.id.clone(), s)).collect();
 
     // Scan all provider directories and collect skills by directory name
-    let mut provider_skills_map: std::collections::HashMap<String, (PathBuf, Vec<String>)> = std::collections::HashMap::new();
+    let mut provider_skills_map: std::collections::HashMap<String, (PathBuf, Vec<String>)> =
+        std::collections::HashMap::new();
 
     for (provider, skills_dir) in get_provider_skills_dirs() {
         if !skills_dir.exists() {
@@ -124,7 +126,8 @@ pub fn list_skills_cmd(ctx: &SkillsContext) -> Result<Vec<Skill>, String> {
     for (skill_id, (skill_path, providers)) in provider_skills_map {
         if let Some(existing_skill) = skills_map.get_mut(&skill_id) {
             // Update enabled_json to reflect actual presence in provider directories
-            let mut state = existing_skill.get_enabled_state()
+            let mut state = existing_skill
+                .get_enabled_state()
                 .unwrap_or_else(|_| agentdock_core::skills::SkillEnabledState::all_disabled());
 
             for provider in &providers {
@@ -138,7 +141,10 @@ pub fn list_skills_cmd(ctx: &SkillsContext) -> Result<Vec<Skill>, String> {
                 if let Err(e) = fs::create_dir_all(&agentdock_skills_dir)
                     .and_then(|_| copy_dir_all(&skill_path, &agentdock_copy))
                 {
-                    eprintln!("[SKILL] Failed to create master copy for {}: {}", skill_id, e);
+                    eprintln!(
+                        "[SKILL] Failed to create master copy for {}: {}",
+                        skill_id, e
+                    );
                 } else {
                     // Update source to point to AgentDock master copy
                     existing_skill.source = agentdock_copy.to_string_lossy().to_string();
@@ -146,7 +152,9 @@ pub fn list_skills_cmd(ctx: &SkillsContext) -> Result<Vec<Skill>, String> {
             }
         } else {
             // Create new skill entry from provider directory
-            if let Ok(mut skill) = parse_provider_skill_as_skill(&skill_path, &skill_id, &providers[0]) {
+            if let Ok(mut skill) =
+                parse_provider_skill_as_skill(&skill_path, &skill_id, &providers[0])
+            {
                 // Mark all providers where this skill was found
                 let mut state = agentdock_core::skills::SkillEnabledState::all_disabled();
                 for provider in &providers {
@@ -160,7 +168,10 @@ pub fn list_skills_cmd(ctx: &SkillsContext) -> Result<Vec<Skill>, String> {
                     if let Err(e) = fs::create_dir_all(&agentdock_skills_dir)
                         .and_then(|_| copy_dir_all(&skill_path, &agentdock_copy))
                     {
-                        eprintln!("[SKILL] Failed to create master copy for {}: {}", skill_id, e);
+                        eprintln!(
+                            "[SKILL] Failed to create master copy for {}: {}",
+                            skill_id, e
+                        );
                     } else {
                         skill.source = agentdock_copy.to_string_lossy().to_string();
                     }
@@ -246,8 +257,8 @@ fn parse_skill_md_as_skill(
     skill_dir: &Path,
     provider: &str,
 ) -> Result<Skill, String> {
-    let content = fs::read_to_string(skill_md)
-        .map_err(|e| format!("Failed to read SKILL.md: {e}"))?;
+    let content =
+        fs::read_to_string(skill_md).map_err(|e| format!("Failed to read SKILL.md: {e}"))?;
     let content = content.trim_start_matches('\u{feff}');
 
     let parts: Vec<&str> = content.splitn(3, "---").collect();
@@ -265,10 +276,7 @@ fn parse_skill_md_as_skill(
             }
         }
 
-        (
-            name.unwrap_or_else(|| dir_name.to_string()),
-            description,
-        )
+        (name.unwrap_or_else(|| dir_name.to_string()), description)
     } else {
         (dir_name.to_string(), None)
     };
@@ -298,8 +306,8 @@ fn parse_skill_json_as_skill(
     skill_dir: &Path,
     provider: &str,
 ) -> Result<Skill, String> {
-    let content = fs::read_to_string(skill_json)
-        .map_err(|e| format!("Failed to read skill.json: {e}"))?;
+    let content =
+        fs::read_to_string(skill_json).map_err(|e| format!("Failed to read skill.json: {e}"))?;
 
     #[derive(Deserialize)]
     struct SkillJson {
@@ -308,12 +316,11 @@ fn parse_skill_json_as_skill(
         version: Option<String>,
     }
 
-    let meta: SkillJson = serde_json::from_str(&content)
-        .unwrap_or(SkillJson {
-            name: None,
-            description: None,
-            version: None,
-        });
+    let meta: SkillJson = serde_json::from_str(&content).unwrap_or(SkillJson {
+        name: None,
+        description: None,
+        version: None,
+    });
 
     let mut state = agentdock_core::skills::SkillEnabledState::all_disabled();
     state.set_enabled(provider, true);
@@ -367,10 +374,11 @@ pub fn install_skill_from_path_cmd(
         .map_err(|e| format!("Failed to copy skill files: {e}"))?;
 
     // Copy to all enabled provider directories
-    let enabled_state = skill.get_enabled_state()
+    let enabled_state = skill
+        .get_enabled_state()
         .map_err(|e| format!("Failed to get enabled state: {e}"))?;
 
-    for provider in ["claude_code", "codex", "opencode"] {
+    for provider in ["claude_code", "codex", "antigravity", "opencode"] {
         if enabled_state.is_enabled_for(provider) {
             let provider_dir = get_provider_skills_dir(provider);
             let dest = provider_dir.join(&metadata.id);
@@ -386,15 +394,18 @@ pub fn install_skill_from_path_cmd(
     Ok(skill)
 }
 
-pub fn install_skill_from_git_cmd(
-    ctx: &SkillsContext,
-    git_url: &str,
-) -> Result<Skill, String> {
-    let temp_dir = tempfile::tempdir()
-        .map_err(|e| format!("Failed to create temp directory: {e}"))?;
+pub fn install_skill_from_git_cmd(ctx: &SkillsContext, git_url: &str) -> Result<Skill, String> {
+    let temp_dir =
+        tempfile::tempdir().map_err(|e| format!("Failed to create temp directory: {e}"))?;
 
     let status = std::process::Command::new("git")
-        .args(["clone", "--depth", "1", git_url, temp_dir.path().to_str().unwrap()])
+        .args([
+            "clone",
+            "--depth",
+            "1",
+            git_url,
+            temp_dir.path().to_str().unwrap(),
+        ])
         .status()
         .map_err(|e| format!("Failed to run git clone: {e}"))?;
 
@@ -421,10 +432,11 @@ pub fn install_skill_from_git_cmd(
         .map_err(|e| format!("Failed to copy skill files: {e}"))?;
 
     // Copy to all enabled provider directories
-    let enabled_state = skill.get_enabled_state()
+    let enabled_state = skill
+        .get_enabled_state()
         .map_err(|e| format!("Failed to get enabled state: {e}"))?;
 
-    for provider in ["claude_code", "codex", "opencode"] {
+    for provider in ["claude_code", "codex", "antigravity", "opencode"] {
         if enabled_state.is_enabled_for(provider) {
             let provider_dir = get_provider_skills_dir(provider);
             let dest = provider_dir.join(&metadata.id);
@@ -448,8 +460,8 @@ pub fn install_discovered_skill_cmd(
 ) -> Result<Skill, String> {
     progress("downloading", "Downloading repository archive...");
 
-    let temp_dir = tempfile::tempdir()
-        .map_err(|e| format!("Failed to create temp directory: {e}"))?;
+    let temp_dir =
+        tempfile::tempdir().map_err(|e| format!("Failed to create temp directory: {e}"))?;
 
     // Download the repo as ZIP
     let repo_url = format!(
@@ -464,7 +476,10 @@ pub fn install_discovered_skill_cmd(
         .map_err(|e| format!("Failed to download: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
     }
 
     let bytes = response
@@ -472,8 +487,8 @@ pub fn install_discovered_skill_cmd(
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     let cursor = Cursor::new(bytes.as_ref());
-    let mut archive = zip::ZipArchive::new(cursor)
-        .map_err(|e| format!("Failed to open ZIP: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to open ZIP: {e}"))?;
 
     if archive.is_empty() {
         return Err("Empty archive".to_string());
@@ -499,8 +514,7 @@ pub fn install_discovered_skill_cmd(
     let skill_dir = temp_dir.path().join(skill_subdir);
 
     // Ensure the skill directory exists before extraction
-    fs::create_dir_all(&skill_dir)
-        .map_err(|e| format!("Failed to create skill directory: {e}"))?;
+    fs::create_dir_all(&skill_dir).map_err(|e| format!("Failed to create skill directory: {e}"))?;
 
     // Extract files from the archive that are within the skill subdirectory
     for i in 0..archive.len() {
@@ -534,15 +548,14 @@ pub fn install_discovered_skill_cmd(
         let outpath = skill_dir.join(final_relative);
 
         if file.is_dir() {
-            fs::create_dir_all(&outpath)
-                .map_err(|e| format!("Failed to create directory: {e}"))?;
+            fs::create_dir_all(&outpath).map_err(|e| format!("Failed to create directory: {e}"))?;
         } else {
             if let Some(parent) = outpath.parent() {
                 fs::create_dir_all(parent)
                     .map_err(|e| format!("Failed to create parent directory: {e}"))?;
             }
-            let mut outfile = fs::File::create(&outpath)
-                .map_err(|e| format!("Failed to create file: {e}"))?;
+            let mut outfile =
+                fs::File::create(&outpath).map_err(|e| format!("Failed to create file: {e}"))?;
             std::io::copy(&mut file, &mut outfile)
                 .map_err(|e| format!("Failed to write file: {e}"))?;
         }
@@ -557,7 +570,10 @@ pub fn install_discovered_skill_cmd(
     // Create skill record with all providers enabled by default
     let skill = create_skill_from_git_metadata(
         &metadata,
-        &format!("https://github.com/{}/{}", discovered.repo_owner, discovered.repo_name),
+        &format!(
+            "https://github.com/{}/{}",
+            discovered.repo_owner, discovered.repo_name
+        ),
     )
     .map_err(|e| format!("Failed to create skill from metadata: {e}"))?;
 
@@ -586,10 +602,11 @@ pub fn install_discovered_skill_cmd(
     // Copy to all enabled provider directories
     progress("syncing_providers", "Syncing provider directories...");
 
-    let enabled_state = skill.get_enabled_state()
+    let enabled_state = skill
+        .get_enabled_state()
         .map_err(|e| format!("Failed to get enabled state: {e}"))?;
 
-    for provider in ["claude_code", "codex", "opencode"] {
+    for provider in ["claude_code", "codex", "antigravity", "opencode"] {
         if enabled_state.is_enabled_for(provider) {
             let provider_dir = get_provider_skills_dir(provider);
             let dest = provider_dir.join(&metadata.id);
@@ -611,8 +628,7 @@ pub fn toggle_skill_enabled_cmd(
     enabled: bool,
 ) -> Result<(), String> {
     let conn = ctx.get_connection()?;
-    update_skill_enabled(&conn, id, enabled)
-        .map_err(|e| format!("Failed to update skill: {e}"))?;
+    update_skill_enabled(&conn, id, enabled).map_err(|e| format!("Failed to update skill: {e}"))?;
     Ok(())
 }
 
@@ -737,12 +753,156 @@ fn find_skill_source_dir(skill: &Skill) -> Option<PathBuf> {
     None
 }
 
+fn codex_skills_paths(home: &Path) -> (PathBuf, PathBuf) {
+    let canonical = home.join(".agents").join("skills");
+    let legacy = home.join(".codex").join("skills");
+    (canonical, legacy)
+}
+
+fn ensure_codex_skills_migrated() {
+    CODEX_SKILLS_MIGRATION_ONCE.get_or_init(|| {
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let (canonical, legacy) = codex_skills_paths(&home);
+        if let Err(error) = migrate_codex_skills_dir(&legacy, &canonical) {
+            eprintln!(
+                "[SKILL] Failed to migrate Codex skills directory from {} to {}: {}",
+                legacy.display(),
+                canonical.display(),
+                error
+            );
+        }
+    });
+}
+
+fn migrate_codex_skills_dir(legacy: &Path, canonical: &Path) -> Result<(), String> {
+    if !legacy.exists() || !legacy.is_dir() {
+        return Ok(());
+    }
+
+    if !canonical.exists() {
+        if let Some(parent) = canonical.parent() {
+            fs::create_dir_all(parent).map_err(|error| {
+                format!(
+                    "Failed to create Codex canonical skills parent {}: {error}",
+                    parent.display()
+                )
+            })?;
+        }
+
+        match fs::rename(legacy, canonical) {
+            Ok(_) => return Ok(()),
+            Err(_) => {
+                // Fall through to merge copy when rename is not available.
+            }
+        }
+    }
+
+    if !canonical.exists() {
+        fs::create_dir_all(canonical).map_err(|error| {
+            format!(
+                "Failed to create Codex canonical skills directory {}: {error}",
+                canonical.display()
+            )
+        })?;
+    }
+
+    merge_missing_entries(legacy, canonical)?;
+    if is_directory_empty(legacy) {
+        let _ = fs::remove_dir(legacy);
+    }
+    Ok(())
+}
+
+fn merge_missing_entries(src: &Path, dst: &Path) -> Result<(), String> {
+    let entries = fs::read_dir(src).map_err(|error| {
+        format!(
+            "Failed to read legacy skills directory {}: {error}",
+            src.display()
+        )
+    })?;
+
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("Failed to read legacy skill entry: {error}"))?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("Failed to inspect legacy skill entry: {error}"))?;
+
+        if dst_path.exists() {
+            if file_type.is_dir() && dst_path.is_dir() {
+                merge_missing_entries(&src_path, &dst_path)?;
+                if is_directory_empty(&src_path) {
+                    let _ = fs::remove_dir(&src_path);
+                }
+            }
+            continue;
+        }
+
+        match fs::rename(&src_path, &dst_path) {
+            Ok(_) => {}
+            Err(_) => {
+                if file_type.is_dir() {
+                    copy_dir_all(&src_path, &dst_path).map_err(|error| {
+                        format!(
+                            "Failed to copy legacy skill directory {} to {}: {error}",
+                            src_path.display(),
+                            dst_path.display()
+                        )
+                    })?;
+                    let _ = fs::remove_dir_all(&src_path);
+                } else {
+                    fs::copy(&src_path, &dst_path).map_err(|error| {
+                        format!(
+                            "Failed to copy legacy skill file {} to {}: {error}",
+                            src_path.display(),
+                            dst_path.display()
+                        )
+                    })?;
+                    let _ = fs::remove_file(&src_path);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn is_directory_empty(path: &Path) -> bool {
+    match fs::read_dir(path) {
+        Ok(mut entries) => entries.next().is_none(),
+        Err(_) => false,
+    }
+}
+
+fn resolve_codex_skills_dir() -> PathBuf {
+    ensure_codex_skills_migrated();
+    let home = dirs::home_dir().unwrap_or_default();
+    let (canonical, legacy) = codex_skills_paths(&home);
+
+    if canonical.exists() {
+        canonical
+    } else if legacy.exists() {
+        legacy
+    } else {
+        canonical
+    }
+}
+
+fn resolve_antigravity_skills_dir() -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_default();
+    home.join(".gemini").join("antigravity").join("skills")
+}
+
 fn get_provider_skills_dir(provider: &str) -> PathBuf {
     let home = dirs::home_dir().unwrap_or_default();
 
     match provider {
         "claude_code" => home.join(".claude").join("skills"),
-        "codex" => home.join(".codex").join("skills"),
+        "codex" => resolve_codex_skills_dir(),
+        "antigravity" => resolve_antigravity_skills_dir(),
         "opencode" => home.join(".config").join("opencode").join("skills"),
         _ => home.join(".claude").join("skills"), // Default to claude
     }
@@ -753,8 +913,12 @@ fn get_provider_skills_dirs() -> Vec<(&'static str, PathBuf)> {
 
     vec![
         ("claude_code", home.join(".claude").join("skills")),
-        ("codex", home.join(".codex").join("skills")),
-        ("opencode", home.join(".config").join("opencode").join("skills")),
+        ("codex", resolve_codex_skills_dir()),
+        ("antigravity", resolve_antigravity_skills_dir()),
+        (
+            "opencode",
+            home.join(".config").join("opencode").join("skills"),
+        ),
     ]
 }
 
@@ -850,7 +1014,10 @@ struct DiscoverCache {
 const CACHE_TTL_SECS: i64 = 3600; // 1 hour
 
 fn get_discover_cache_path(ctx: &SkillsContext) -> PathBuf {
-    ctx.skills_dir.parent().unwrap_or(&ctx.skills_dir).join("discover_cache.json")
+    ctx.skills_dir
+        .parent()
+        .unwrap_or(&ctx.skills_dir)
+        .join("discover_cache.json")
 }
 
 fn load_discover_cache(ctx: &SkillsContext) -> Option<DiscoverCache> {
@@ -882,18 +1049,28 @@ pub fn discover_skills_cmd(ctx: &SkillsContext) -> Result<Vec<DiscoverableSkill>
     discover_skills_cmd_with_cache(ctx, false)
 }
 
-pub fn discover_skills_cmd_with_cache(ctx: &SkillsContext, force_refresh: bool) -> Result<Vec<DiscoverableSkill>, String> {
+pub fn discover_skills_cmd_with_cache(
+    ctx: &SkillsContext,
+    force_refresh: bool,
+) -> Result<Vec<DiscoverableSkill>, String> {
     let conn = ctx.get_connection()?;
     let repos = list_skill_repos(&conn).map_err(|e| format!("Failed to list repos: {e}"))?;
 
-    let repo_ids: Vec<String> = repos.iter().filter(|r| r.enabled).map(|r| r.id.clone()).collect();
+    let repo_ids: Vec<String> = repos
+        .iter()
+        .filter(|r| r.enabled)
+        .map(|r| r.id.clone())
+        .collect();
 
     // Try to load from cache if not forcing refresh
     if !force_refresh {
         if let Some(cache) = load_discover_cache(ctx) {
             // Check if repos haven't changed
             if cache.repo_ids == repo_ids {
-                eprintln!("[SKILL] Using cached discover results ({} skills)", cache.skills.len());
+                eprintln!(
+                    "[SKILL] Using cached discover results ({} skills)",
+                    cache.skills.len()
+                );
                 return Ok(cache.skills);
             }
         }
@@ -926,14 +1103,17 @@ pub fn discover_skills_cmd_with_cache(ctx: &SkillsContext, force_refresh: bool) 
         repo_ids,
     };
     save_discover_cache(ctx, &cache);
-    eprintln!("[SKILL] Cached discover results ({} skills)", all_skills.len());
+    eprintln!(
+        "[SKILL] Cached discover results ({} skills)",
+        all_skills.len()
+    );
 
     Ok(all_skills)
 }
 
 fn discover_repo_skills(repo: &SkillRepo) -> Result<Vec<DiscoverableSkill>, String> {
-    let temp_dir = tempfile::tempdir()
-        .map_err(|e| format!("Failed to create temp directory: {e}"))?;
+    let temp_dir =
+        tempfile::tempdir().map_err(|e| format!("Failed to create temp directory: {e}"))?;
     let temp_path = temp_dir.path().to_path_buf();
 
     // Try multiple branches
@@ -976,7 +1156,10 @@ fn download_and_extract_zip(url: &str, dest: &Path) -> Result<(), String> {
         .map_err(|e| format!("Failed to download: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
     }
 
     let bytes = response
@@ -984,8 +1167,8 @@ fn download_and_extract_zip(url: &str, dest: &Path) -> Result<(), String> {
         .map_err(|e| format!("Failed to read response: {e}"))?;
 
     let cursor = Cursor::new(bytes.as_ref());
-    let mut archive = zip::ZipArchive::new(cursor)
-        .map_err(|e| format!("Failed to open ZIP: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to open ZIP: {e}"))?;
 
     if archive.is_empty() {
         return Err("Empty archive".to_string());
@@ -1025,15 +1208,14 @@ fn download_and_extract_zip(url: &str, dest: &Path) -> Result<(), String> {
         let outpath = dest.join(relative_path);
 
         if file.is_dir() {
-            fs::create_dir_all(&outpath)
-                .map_err(|e| format!("Failed to create directory: {e}"))?;
+            fs::create_dir_all(&outpath).map_err(|e| format!("Failed to create directory: {e}"))?;
         } else {
             if let Some(parent) = outpath.parent() {
                 fs::create_dir_all(parent)
                     .map_err(|e| format!("Failed to create parent directory: {e}"))?;
             }
-            let mut outfile = fs::File::create(&outpath)
-                .map_err(|e| format!("Failed to create file: {e}"))?;
+            let mut outfile =
+                fs::File::create(&outpath).map_err(|e| format!("Failed to create file: {e}"))?;
             std::io::copy(&mut file, &mut outfile)
                 .map_err(|e| format!("Failed to write file: {e}"))?;
         }
@@ -1085,8 +1267,8 @@ fn scan_dir_for_skills(
     }
 
     // Recursively scan subdirectories
-    let entries = fs::read_dir(current_dir)
-        .map_err(|e| format!("Failed to read directory: {e}"))?;
+    let entries =
+        fs::read_dir(current_dir).map_err(|e| format!("Failed to read directory: {e}"))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
@@ -1110,8 +1292,8 @@ fn build_skill_from_skill_md(
     directory: &str,
     repo: &SkillRepo,
 ) -> Result<DiscoverableSkill, String> {
-    let content = fs::read_to_string(skill_md)
-        .map_err(|e| format!("Failed to read SKILL.md: {e}"))?;
+    let content =
+        fs::read_to_string(skill_md).map_err(|e| format!("Failed to read SKILL.md: {e}"))?;
     let content = content.trim_start_matches('\u{feff}');
 
     // Parse YAML front matter
@@ -1160,8 +1342,8 @@ fn build_skill_from_skill_json(
     directory: &str,
     repo: &SkillRepo,
 ) -> Result<DiscoverableSkill, String> {
-    let content = fs::read_to_string(skill_json)
-        .map_err(|e| format!("Failed to read skill.json: {e}"))?;
+    let content =
+        fs::read_to_string(skill_json).map_err(|e| format!("Failed to read skill.json: {e}"))?;
 
     #[derive(Deserialize)]
     struct SkillJson {
@@ -1169,8 +1351,8 @@ fn build_skill_from_skill_json(
         description: Option<String>,
     }
 
-    let meta: SkillJson = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse skill.json: {e}"))?;
+    let meta: SkillJson =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse skill.json: {e}"))?;
 
     Ok(DiscoverableSkill {
         key: format!("{}/{}:{}", repo.owner, repo.name, directory),
@@ -1204,10 +1386,8 @@ pub struct ProviderSkill {
 pub fn scan_provider_skills_cmd(ctx: &SkillsContext) -> Result<Vec<ProviderSkill>, String> {
     let conn = ctx.get_connection()?;
     let installed_skills = list_skills(&conn).map_err(|e| format!("Failed to list skills: {e}"))?;
-    let installed_dirs: std::collections::HashSet<String> = installed_skills
-        .iter()
-        .map(|s| s.id.clone())
-        .collect();
+    let installed_dirs: std::collections::HashSet<String> =
+        installed_skills.iter().map(|s| s.id.clone()).collect();
 
     let mut found_skills = Vec::new();
 
@@ -1216,8 +1396,8 @@ pub fn scan_provider_skills_cmd(ctx: &SkillsContext) -> Result<Vec<ProviderSkill
             continue;
         }
 
-        let entries = fs::read_dir(&skills_dir)
-            .map_err(|e| format!("Failed to read directory: {e}"))?;
+        let entries =
+            fs::read_dir(&skills_dir).map_err(|e| format!("Failed to read directory: {e}"))?;
 
         for entry in entries {
             let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
@@ -1252,7 +1432,11 @@ pub fn scan_provider_skills_cmd(ctx: &SkillsContext) -> Result<Vec<ProviderSkill
     Ok(found_skills)
 }
 
-fn parse_provider_skill(skill_dir: &Path, dir_name: &str, provider: &str) -> Result<ProviderSkill, String> {
+fn parse_provider_skill(
+    skill_dir: &Path,
+    dir_name: &str,
+    provider: &str,
+) -> Result<ProviderSkill, String> {
     // Try SKILL.md first
     let skill_md = skill_dir.join("SKILL.md");
     if skill_md.exists() {
@@ -1265,7 +1449,10 @@ fn parse_provider_skill(skill_dir: &Path, dir_name: &str, provider: &str) -> Res
         return parse_skill_json_file(&skill_json, dir_name, provider, skill_dir);
     }
 
-    Err(format!("No SKILL.md or skill.json found in {}", skill_dir.display()))
+    Err(format!(
+        "No SKILL.md or skill.json found in {}",
+        skill_dir.display()
+    ))
 }
 
 fn parse_skill_md_file(
@@ -1274,8 +1461,8 @@ fn parse_skill_md_file(
     provider: &str,
     skill_dir: &Path,
 ) -> Result<ProviderSkill, String> {
-    let content = fs::read_to_string(skill_md)
-        .map_err(|e| format!("Failed to read SKILL.md: {e}"))?;
+    let content =
+        fs::read_to_string(skill_md).map_err(|e| format!("Failed to read SKILL.md: {e}"))?;
     let content = content.trim_start_matches('\u{feff}');
 
     // Parse YAML front matter
@@ -1319,8 +1506,8 @@ fn parse_skill_json_file(
     provider: &str,
     skill_dir: &Path,
 ) -> Result<ProviderSkill, String> {
-    let content = fs::read_to_string(skill_json)
-        .map_err(|e| format!("Failed to read skill.json: {e}"))?;
+    let content =
+        fs::read_to_string(skill_json).map_err(|e| format!("Failed to read skill.json: {e}"))?;
 
     #[derive(Deserialize)]
     struct SkillJson {
@@ -1328,8 +1515,8 @@ fn parse_skill_json_file(
         description: Option<String>,
     }
 
-    let meta: SkillJson = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse skill.json: {e}"))?;
+    let meta: SkillJson =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse skill.json: {e}"))?;
 
     Ok(ProviderSkill {
         key: format!("local:{}", dir_name),
@@ -1353,7 +1540,7 @@ pub fn import_provider_skills_cmd(
         // Find the skill in provider directories
         let found = find_provider_skill_by_key(&key)?;
 
-        if let Some((provider_skill, provider)) = found {
+        if let Some((provider_skill, _provider)) = found {
             // Copy skill to AgentDock skills directory
             let skill_dir = ctx.skills_dir.join(&provider_skill.directory);
             if skill_dir.exists() {
@@ -1379,7 +1566,10 @@ pub fn import_provider_skills_cmd(
                 },
                 source: provider_skill.path.clone(),
                 version: "1.0.0".to_string(),
-                enabled_json: serde_json::to_string(&agentdock_core::skills::SkillEnabledState::all_enabled()).unwrap_or_default(),
+                enabled_json: serde_json::to_string(
+                    &agentdock_core::skills::SkillEnabledState::all_enabled(),
+                )
+                .unwrap_or_default(),
                 compatibility_json: "{}".to_string(),
                 readme_url: None,
                 repo_owner: None,
@@ -1388,8 +1578,7 @@ pub fn import_provider_skills_cmd(
                 installed_at: chrono::Utc::now().timestamp_millis(),
             };
 
-            insert_skill(&conn, &skill)
-                .map_err(|e| format!("Failed to insert skill: {e}"))?;
+            insert_skill(&conn, &skill).map_err(|e| format!("Failed to insert skill: {e}"))?;
 
             imported.push(skill);
         }
@@ -1411,4 +1600,56 @@ fn find_provider_skill_by_key(key: &str) -> Result<Option<(ProviderSkill, String
         }
     }
     Ok(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::migrate_codex_skills_dir;
+    use std::fs;
+
+    #[test]
+    fn migrate_codex_skills_moves_legacy_dir_to_agents_dir() {
+        let temp = tempfile::tempdir().expect("tempdir should be created");
+        let home = temp.path();
+
+        let legacy = home.join(".codex").join("skills");
+        let canonical = home.join(".agents").join("skills");
+
+        let skill_dir = legacy.join("demo-skill");
+        fs::create_dir_all(&skill_dir).expect("legacy skill dir should be created");
+        fs::write(skill_dir.join("SKILL.md"), "# demo").expect("skill file should be written");
+
+        migrate_codex_skills_dir(&legacy, &canonical).expect("migration should succeed");
+
+        assert!(canonical.join("demo-skill").join("SKILL.md").exists());
+        assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn migrate_codex_skills_merges_missing_entries_without_overwriting_existing() {
+        let temp = tempfile::tempdir().expect("tempdir should be created");
+        let home = temp.path();
+
+        let legacy = home.join(".codex").join("skills");
+        let canonical = home.join(".agents").join("skills");
+
+        fs::create_dir_all(legacy.join("shared")).expect("legacy shared dir should be created");
+        fs::create_dir_all(legacy.join("legacy-only")).expect("legacy-only dir should be created");
+        fs::write(legacy.join("shared").join("SKILL.md"), "legacy")
+            .expect("legacy shared file should be written");
+        fs::write(legacy.join("legacy-only").join("SKILL.md"), "legacy-only")
+            .expect("legacy-only file should be written");
+
+        fs::create_dir_all(canonical.join("shared"))
+            .expect("canonical shared dir should be created");
+        fs::write(canonical.join("shared").join("SKILL.md"), "canonical")
+            .expect("canonical shared file should be written");
+
+        migrate_codex_skills_dir(&legacy, &canonical).expect("migration should succeed");
+
+        let shared_content = fs::read_to_string(canonical.join("shared").join("SKILL.md"))
+            .expect("canonical shared file should be readable");
+        assert_eq!(shared_content, "canonical");
+        assert!(canonical.join("legacy-only").join("SKILL.md").exists());
+    }
 }

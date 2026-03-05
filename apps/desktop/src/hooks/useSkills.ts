@@ -79,13 +79,26 @@ export function useSkills(): UseSkillsResult {
   );
 
   const getEnabledState = useCallback((skill: Skill): SkillEnabledState => {
+    const allEnabled: SkillEnabledState = {
+      claude_code: true,
+      codex: true,
+      opencode: true,
+      antigravity: true,
+    };
+
     if (!skill.enabledJson || skill.enabledJson === "{}") {
-      return { claude_code: true, codex: true, opencode: true };
+      return allEnabled;
     }
     try {
-      return JSON.parse(skill.enabledJson) as SkillEnabledState;
+      const parsed = JSON.parse(skill.enabledJson) as Partial<SkillEnabledState>;
+      return {
+        claude_code: parsed.claude_code ?? true,
+        codex: parsed.codex ?? true,
+        opencode: parsed.opencode ?? true,
+        antigravity: parsed.antigravity ?? true,
+      };
     } catch {
-      return { claude_code: true, codex: true, opencode: true };
+      return allEnabled;
     }
   }, []);
 
@@ -229,8 +242,8 @@ export function useSkills(): UseSkillsResult {
         });
         setSkills((prev) => {
           const newState = enabled
-            ? { claude_code: true, codex: true, opencode: true }
-            : { claude_code: false, codex: false, opencode: false };
+            ? { claude_code: true, codex: true, opencode: true, antigravity: true }
+            : { claude_code: false, codex: false, opencode: false, antigravity: false };
           return prev.map((s) =>
             s.id === id
               ? { ...s, enabledJson: JSON.stringify(newState) }

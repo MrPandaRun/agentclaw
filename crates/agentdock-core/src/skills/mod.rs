@@ -18,12 +18,27 @@ pub enum SkillError {
     InvalidMetadata(String),
 }
 
+fn enabled_default_true() -> bool {
+    true
+}
+
 /// Per-provider enable/disable state for a skill
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillEnabledState {
+    #[serde(default = "enabled_default_true")]
     pub claude_code: bool,
+    #[serde(default = "enabled_default_true")]
     pub codex: bool,
+    #[serde(default = "enabled_default_true")]
     pub opencode: bool,
+    #[serde(default = "enabled_default_true")]
+    pub antigravity: bool,
+}
+
+impl Default for SkillEnabledState {
+    fn default() -> Self {
+        Self::all_enabled()
+    }
 }
 
 impl SkillEnabledState {
@@ -32,6 +47,7 @@ impl SkillEnabledState {
             claude_code: true,
             codex: true,
             opencode: true,
+            antigravity: true,
         }
     }
 
@@ -40,6 +56,7 @@ impl SkillEnabledState {
             claude_code: false,
             codex: false,
             opencode: false,
+            antigravity: false,
         }
     }
 
@@ -48,6 +65,7 @@ impl SkillEnabledState {
             "claude_code" => self.claude_code,
             "codex" => self.codex,
             "opencode" => self.opencode,
+            "antigravity" => self.antigravity,
             _ => false,
         }
     }
@@ -57,12 +75,13 @@ impl SkillEnabledState {
             "claude_code" => self.claude_code = enabled,
             "codex" => self.codex = enabled,
             "opencode" => self.opencode = enabled,
+            "antigravity" => self.antigravity = enabled,
             _ => {}
         }
     }
 
     pub fn is_any_enabled(&self) -> bool {
-        self.claude_code || self.codex || self.opencode
+        self.claude_code || self.codex || self.opencode || self.antigravity
     }
 }
 
@@ -131,7 +150,7 @@ pub struct SkillRepo {
 pub fn list_skills(connection: &Connection) -> Result<Vec<Skill>, SkillError> {
     let mut stmt = connection.prepare(
         "SELECT id, name, COALESCE(description, ''), source, version,
-                COALESCE(enabled_json, '{\"claude_code\":true,\"codex\":true,\"opencode\":true}'),
+                COALESCE(enabled_json, '{\"claude_code\":true,\"codex\":true,\"opencode\":true,\"antigravity\":true}'),
                 COALESCE(compatibility_json, '{}'),
                 COALESCE(readme_url, ''),
                 COALESCE(repo_owner, ''),
@@ -175,7 +194,7 @@ fn nullable_string_from_row(row: &rusqlite::Row, idx: usize) -> Option<String> {
 pub fn get_skill(connection: &Connection, id: &str) -> Result<Skill, SkillError> {
     let mut stmt = connection.prepare(
         "SELECT id, name, COALESCE(description, ''), source, version,
-                COALESCE(enabled_json, '{\"claude_code\":true,\"codex\":true,\"opencode\":true}'),
+                COALESCE(enabled_json, '{\"claude_code\":true,\"codex\":true,\"opencode\":true,\"antigravity\":true}'),
                 COALESCE(compatibility_json, '{}'),
                 COALESCE(readme_url, ''),
                 COALESCE(repo_owner, ''),
@@ -649,7 +668,8 @@ mod tests {
             description: Some("A test skill".to_string()),
             source: "/path/to/skill".to_string(),
             version: "1.0.0".to_string(),
-            enabled_json: r#"{"claude_code":true,"codex":true,"opencode":true}"#.to_string(),
+            enabled_json: r#"{"claude_code":true,"codex":true,"opencode":true,"antigravity":true}"#
+                .to_string(),
             compatibility_json: r#"{"providers":["claude_code"]}"#.to_string(),
             readme_url: None,
             repo_owner: None,
@@ -677,7 +697,8 @@ mod tests {
             description: None,
             source: "/path".to_string(),
             version: "1.0.0".to_string(),
-            enabled_json: r#"{"claude_code":true,"codex":true,"opencode":true}"#.to_string(),
+            enabled_json: r#"{"claude_code":true,"codex":true,"opencode":true,"antigravity":true}"#
+                .to_string(),
             compatibility_json: "{}".to_string(),
             readme_url: None,
             repo_owner: None,
@@ -696,6 +717,7 @@ mod tests {
         assert!(state.claude_code);
         assert!(!state.codex);
         assert!(state.opencode);
+        assert!(state.antigravity);
     }
 
     #[test]
@@ -731,6 +753,7 @@ mod tests {
         assert!(all.is_enabled_for("claude_code"));
         assert!(all.is_enabled_for("codex"));
         assert!(all.is_enabled_for("opencode"));
+        assert!(all.is_enabled_for("antigravity"));
         assert!(all.is_any_enabled());
 
         let none = SkillEnabledState::all_disabled();
@@ -741,6 +764,7 @@ mod tests {
         partial.set_enabled("codex", true);
         assert!(!partial.is_enabled_for("claude_code"));
         assert!(partial.is_enabled_for("codex"));
+        assert!(!partial.is_enabled_for("antigravity"));
         assert!(partial.is_any_enabled());
     }
 
