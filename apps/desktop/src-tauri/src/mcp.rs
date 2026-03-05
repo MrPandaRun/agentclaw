@@ -174,7 +174,8 @@ fn sync_managed_servers_from_agents(
     let mut existing = list_mcp_servers(&transaction)
         .map_err(|error| format!("Failed to list MCP servers during discovery sync: {error}"))?;
 
-    let mut discovered_by_signature: HashMap<String, Vec<DiscoveredProviderServer>> = HashMap::new();
+    let mut discovered_by_signature: HashMap<String, Vec<DiscoveredProviderServer>> =
+        HashMap::new();
     for discovered_server in &discovered.servers {
         let signature = discovered_signature_key(discovered_server);
         discovered_by_signature
@@ -252,7 +253,10 @@ fn sync_managed_servers_from_agents(
         if changed {
             server.updated_at = now_iso_utc();
             upsert_mcp_server(&transaction, &server).map_err(|error| {
-                format!("Failed to upsert discovered MCP server {}: {error}", server.id)
+                format!(
+                    "Failed to upsert discovered MCP server {}: {error}",
+                    server.id
+                )
             })?;
             existing[index] = server;
         }
@@ -413,13 +417,41 @@ fn provider_discovery_paths(home_dir: &Path, provider_id: &str) -> Vec<PathBuf> 
             home_dir.join(".codex").join("config.json"),
             home_dir.join(".codex").join("settings.json"),
         ],
-        "opencode" => vec![
-            home_dir.join(".config").join("opencode").join("opencode.json"),
-            home_dir.join(".config").join("opencode").join("config.json"),
-            home_dir.join(".config").join("opencode").join("settings.json"),
-        ],
+        "opencode" => opencode_config_paths(home_dir),
         _ => Vec::new(),
     };
+
+    let mut seen = HashSet::new();
+    paths
+        .into_iter()
+        .filter(|path| seen.insert(path.clone()))
+        .collect()
+}
+
+fn opencode_config_paths(home_dir: &Path) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        let trimmed = local_app_data.trim();
+        if !trimmed.is_empty() {
+            roots.push(PathBuf::from(trimmed).join("opencode"));
+        }
+    }
+    if let Ok(app_data) = std::env::var("APPDATA") {
+        let trimmed = app_data.trim();
+        if !trimmed.is_empty() {
+            roots.push(PathBuf::from(trimmed).join("opencode"));
+        }
+    }
+
+    roots.push(home_dir.join(".config").join("opencode"));
+
+    let mut paths = Vec::new();
+    for root in roots {
+        paths.push(root.join("opencode.json"));
+        paths.push(root.join("config.json"));
+        paths.push(root.join("settings.json"));
+    }
 
     let mut seen = HashSet::new();
     paths
@@ -723,8 +755,7 @@ fn parse_discovered_server_value(
     let mut command = first_non_empty_object_string(object, &["command", "cmd"]);
     let url = first_non_empty_object_string(object, &["url", "target", "endpoint"]);
 
-    let mut args =
-        parse_string_array_value(object.get("args").or_else(|| object.get("arguments")));
+    let mut args = parse_string_array_value(object.get("args").or_else(|| object.get("arguments")));
     if let Some(command_value) = object.get("command") {
         let command_array = parse_string_array_value(Some(command_value));
         if !command_array.is_empty() {
@@ -2231,9 +2262,7 @@ fn build_claude_sync_document(
     let mut root = parse_existing_json_root("claude_code", existing_config)?;
     let specs = collect_provider_server_specs(servers)?;
 
-    let mcp_servers = specs
-        .into_iter()
-        .collect::<Map<String, Value>>();
+    let mcp_servers = specs.into_iter().collect::<Map<String, Value>>();
     root.insert("mcpServers".to_string(), Value::Object(mcp_servers));
 
     serde_json::to_string_pretty(&Value::Object(root))
@@ -2478,7 +2507,10 @@ fn build_codex_sync_document(
     Ok(cleaned)
 }
 
-fn build_fallback_sync_document(provider_id: &str, servers: &[McpServer]) -> Result<String, String> {
+fn build_fallback_sync_document(
+    provider_id: &str,
+    servers: &[McpServer],
+) -> Result<String, String> {
     let specs = collect_provider_server_specs(servers)?;
     let document = json!({
       "providerId": provider_id,
@@ -2505,18 +2537,16 @@ fn resolve_provider_sync_path(home_dir: &Path, provider_id: &str) -> PathBuf {
         }
         "codex" => home_dir.join(".codex").join("config.toml"),
         "opencode" => {
-            let opencode_path = home_dir.join(".config").join("opencode").join("opencode.json");
-            let config_path = home_dir.join(".config").join("opencode").join("config.json");
-            let settings_path = home_dir.join(".config").join("opencode").join("settings.json");
-
-            if opencode_path.exists() {
-                opencode_path
-            } else if config_path.exists() {
-                config_path
-            } else if settings_path.exists() {
-                settings_path
+            let candidates = opencode_config_paths(home_dir);
+            if let Some(existing) = candidates.iter().find(|path| path.exists()) {
+                existing.clone()
             } else {
-                opencode_path
+                candidates.into_iter().next().unwrap_or_else(|| {
+                    home_dir
+                        .join(".config")
+                        .join("opencode")
+                        .join("opencode.json")
+                })
             }
         }
         _ => home_dir
@@ -2710,8 +2740,11 @@ mod tests {
             fs::create_dir_all(parent).expect("codex parent should exist");
         }
 
-        fs::write(&claude_path, r#"{"mcpServers":{"legacy":{"command":"uvx"}}}"#)
-            .expect("seed claude config");
+        fs::write(
+            &claude_path,
+            r#"{"mcpServers":{"legacy":{"command":"uvx"}}}"#,
+        )
+        .expect("seed claude config");
         fs::write(&codex_path, "model = \"gpt-5\"\n").expect("seed codex config");
 
         let execution = execute_sync(
@@ -2730,7 +2763,10 @@ mod tests {
         let codex_after =
             fs::read_to_string(&codex_path).expect("codex config should remain readable");
 
-        assert_eq!(claude_after, r#"{"mcpServers":{"legacy":{"command":"uvx"}}}"#);
+        assert_eq!(
+            claude_after,
+            r#"{"mcpServers":{"legacy":{"command":"uvx"}}}"#
+        );
         assert_eq!(codex_after, "model = \"gpt-5\"\n");
     }
 
@@ -2838,7 +2874,9 @@ mod tests {
             .expect("local server should be parsed");
         assert_eq!(local.transport, "stdio");
         assert_eq!(local.target, "npx");
-        assert!(local.args_json.contains("@modelcontextprotocol/server-filesystem"));
+        assert!(local
+            .args_json
+            .contains("@modelcontextprotocol/server-filesystem"));
 
         let remote = discovered
             .iter()

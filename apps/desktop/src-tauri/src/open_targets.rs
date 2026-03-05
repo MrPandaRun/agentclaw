@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
+use crate::command_utils::command_available;
 use crate::payloads::{
     OpenProjectWithTargetResponse, OpenTargetStatusPayload, ProjectGitBranchPayload,
 };
@@ -129,7 +130,9 @@ struct TargetDetection {
 
 #[derive(Debug, Clone)]
 enum LaunchStrategy {
-    Cli { command: String },
+    Cli {
+        command: String,
+    },
     AppOpen {
         app_path: &'static str,
         app_label: &'static str,
@@ -166,7 +169,9 @@ pub fn open_project_with_target(
         return Err(format!("Project path does not exist: {normalized_path}"));
     }
     if !path.is_dir() {
-        return Err(format!("Project path is not a directory: {normalized_path}"));
+        return Err(format!(
+            "Project path is not a directory: {normalized_path}"
+        ));
     }
 
     let target = OpenTargetId::from_raw(target_id)
@@ -274,24 +279,18 @@ fn detect_target(target: OpenTargetId) -> Result<TargetDetection, String> {
             &["/Applications/Visual Studio Code.app"],
             "VS Code",
         ),
-        OpenTargetId::Cursor => detect_cli_or_app_target(
-            &["cursor"],
-            &["/Applications/Cursor.app"],
-            "Cursor",
-        ),
-        OpenTargetId::Windsurf => detect_cli_or_app_target(
-            &["windsurf"],
-            &["/Applications/Windsurf.app"],
-            "Windsurf",
-        ),
+        OpenTargetId::Cursor => {
+            detect_cli_or_app_target(&["cursor"], &["/Applications/Cursor.app"], "Cursor")
+        }
+        OpenTargetId::Windsurf => {
+            detect_cli_or_app_target(&["windsurf"], &["/Applications/Windsurf.app"], "Windsurf")
+        }
         OpenTargetId::Antigravity => detect_cli_or_app_target(
             &["antigravity"],
             &["/Applications/Antigravity.app"],
             "Antigravity",
         ),
-        OpenTargetId::Zed => {
-            detect_cli_or_app_target(&["zed"], &[ZED_APP_PATH], "Zed")
-        }
+        OpenTargetId::Zed => detect_cli_or_app_target(&["zed"], &[ZED_APP_PATH], "Zed"),
         OpenTargetId::Intellij => {
             detect_cli_or_app_target(&["idea"], &INTELLIJ_APP_PATHS, "IntelliJ IDEA")
         }
@@ -317,16 +316,12 @@ fn resolve_launch_strategy(target: OpenTargetId) -> Result<Option<LaunchStrategy
             &["/Applications/Visual Studio Code.app"],
             "VS Code",
         ),
-        OpenTargetId::Cursor => resolve_cli_or_app_strategy(
-            &["cursor"],
-            &["/Applications/Cursor.app"],
-            "Cursor",
-        ),
-        OpenTargetId::Windsurf => resolve_cli_or_app_strategy(
-            &["windsurf"],
-            &["/Applications/Windsurf.app"],
-            "Windsurf",
-        ),
+        OpenTargetId::Cursor => {
+            resolve_cli_or_app_strategy(&["cursor"], &["/Applications/Cursor.app"], "Cursor")
+        }
+        OpenTargetId::Windsurf => {
+            resolve_cli_or_app_strategy(&["windsurf"], &["/Applications/Windsurf.app"], "Windsurf")
+        }
         OpenTargetId::Antigravity => resolve_cli_or_app_strategy(
             &["antigravity"],
             &["/Applications/Antigravity.app"],
@@ -516,23 +511,11 @@ fn first_existing_app_path(app_paths: &[&'static str]) -> Option<&'static str> {
 
 fn first_available_command(commands: &[&str]) -> Result<Option<String>, String> {
     for command in commands {
-        if command_available(command)? {
+        if command_available(command) {
             return Ok(Some((*command).to_string()));
         }
     }
     Ok(None)
-}
-
-fn command_available(command: &str) -> Result<bool, String> {
-    let output = Command::new("sh")
-        .arg("-lc")
-        .arg(format!(
-            "command -v {} >/dev/null 2>&1",
-            shell_quote(command)
-        ))
-        .output()
-        .map_err(|error| format!("Failed to check command availability: {error}"))?;
-    Ok(output.status.success())
 }
 
 fn normalize_project_path(project_path: &str) -> Result<String, String> {
@@ -685,10 +668,17 @@ fn launch_warp_bundle(_project_path: &str) -> Result<(), String> {
     Err("Warp app launch is only supported on macOS.".to_string())
 }
 
+#[cfg(target_os = "macos")]
 fn escape_applescript(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+#[cfg(target_os = "windows")]
+fn shell_quote(value: &str) -> String {
+    format!("\"{}\"", value.replace('%', "%%").replace('"', "\\\""))
+}
+
+#[cfg(not(target_os = "windows"))]
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
@@ -701,13 +691,18 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        display_cli_command, get_project_git_branch, is_not_git_repo_message, open_project_with_target,
+        display_cli_command, get_project_git_branch, is_not_git_repo_message,
+        open_project_with_target,
     };
 
     #[test]
     fn display_cli_command_quotes_project_path_for_antigravity() {
         let command = display_cli_command("antigravity", "/tmp/my project");
-        assert_eq!(command, "antigravity '/tmp/my project'");
+        if cfg!(target_os = "windows") {
+            assert_eq!(command, "antigravity \"/tmp/my project\"");
+        } else {
+            assert_eq!(command, "antigravity '/tmp/my project'");
+        }
     }
 
     #[test]
@@ -745,7 +740,10 @@ mod tests {
             .expect("temp directory path should be valid UTF-8")
             .to_string();
         run_git(&repo_path, &["init"]);
-        run_git(&repo_path, &["config", "user.email", "agentdock@example.com"]);
+        run_git(
+            &repo_path,
+            &["config", "user.email", "agentdock@example.com"],
+        );
         run_git(&repo_path, &["config", "user.name", "AgentDock"]);
         fs::write(dir.path().join("README.md"), "hello\n").expect("file should be written");
         run_git(&repo_path, &["add", "."]);
