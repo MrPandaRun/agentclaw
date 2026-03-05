@@ -326,9 +326,13 @@ impl ProviderAdapter for ClaudeAdapter {
                 }
             });
 
-        let mut command = format!("{} --resume {}", self.claude_binary(), request.thread_id);
+        let mut command = format!(
+            "{} --resume {}",
+            self.claude_binary(),
+            shell_quote(&request.thread_id)
+        );
         if let Some(path) = project_path {
-            command = format!("cd {} && {command}", shell_quote(&path));
+            command = prepend_workdir_to_command(command, &path);
         }
 
         Ok(ResumeThreadResult {
@@ -459,7 +463,10 @@ fn load_claude_history_titles(config_dir: &Path) -> HashMap<String, String> {
     titles
 }
 
-fn parse_thread_file(path: &Path, official_titles: &HashMap<String, String>) -> Option<ThreadRecord> {
+fn parse_thread_file(
+    path: &Path,
+    official_titles: &HashMap<String, String>,
+) -> Option<ThreadRecord> {
     if path
         .file_name()
         .and_then(|value| value.to_str())
@@ -486,10 +493,7 @@ fn parse_thread_file(path: &Path, official_titles: &HashMap<String, String>) -> 
         };
 
         let timestamp = extract_timestamp(&parsed);
-        let timestamp_ms = timestamp
-            .as_ref()
-            .map(|(_, value)| *value)
-            .unwrap_or(0);
+        let timestamp_ms = timestamp.as_ref().map(|(_, value)| *value).unwrap_or(0);
 
         if let Some(session_id) = parsed
             .get("sessionId")
@@ -522,8 +526,8 @@ fn parse_thread_file(path: &Path, official_titles: &HashMap<String, String>) -> 
                     .and_then(Value::as_str)
                     .unwrap_or("assistant");
                 if role == "user" {
-                    first_user_title = extract_preview_text(message)
-                        .map(|text| truncate_text(&text, 72));
+                    first_user_title =
+                        extract_preview_text(message).map(|text| truncate_text(&text, 72));
                 }
             }
         }
@@ -547,8 +551,8 @@ fn parse_thread_file(path: &Path, official_titles: &HashMap<String, String>) -> 
         .and_then(|title| non_empty_trimmed(title))
         .map(ToString::to_string)
         .or(first_user_title
-        .filter(|text| !text.is_empty())
-        .or_else(|| path_basename(&project_path).map(ToString::to_string)))
+            .filter(|text| !text.is_empty())
+            .or_else(|| path_basename(&project_path).map(ToString::to_string)))
         .unwrap_or_else(|| format!("Claude session {}", truncate_text(&session_id, 8)));
 
     let summary = ThreadSummary {
@@ -586,10 +590,14 @@ fn resolve_canonical_session_id(
         }
     }
 
-    if let Some((session_id, _)) = session_id_stats.iter().max_by(|(left_id, left_stats), (right_id, right_stats)| {
-        compare_session_id_stats(left_stats, right_stats)
-            .then_with(|| right_id.cmp(left_id))
-    }) {
+    if let Some((session_id, _)) =
+        session_id_stats
+            .iter()
+            .max_by(|(left_id, left_stats), (right_id, right_stats)| {
+                compare_session_id_stats(left_stats, right_stats)
+                    .then_with(|| right_id.cmp(left_id))
+            })
+    {
         return Some(session_id.clone());
     }
 
@@ -956,7 +964,14 @@ fn extract_preview_text(message: &Value) -> Option<String> {
             let mut last_text: Option<String> = None;
             for item in items {
                 let block_type = item.get("type").and_then(Value::as_str);
-                if matches!(block_type, Some("thinking") | Some("redacted_thinking") | Some("tool_use") | Some("tool_result") | Some("server_tool_use")) {
+                if matches!(
+                    block_type,
+                    Some("thinking")
+                        | Some("redacted_thinking")
+                        | Some("tool_use")
+                        | Some("tool_result")
+                        | Some("server_tool_use")
+                ) {
                     continue;
                 }
                 if let Some(text) = item.get("text").and_then(Value::as_str) {
@@ -988,10 +1003,7 @@ fn is_internal_command_text(raw: &str) -> bool {
 }
 
 fn normalize_preview_text(raw: &str) -> Option<String> {
-    let normalized = raw
-        .split_whitespace()
-        .collect::<Vec<&str>>()
-        .join(" ");
+    let normalized = raw.split_whitespace().collect::<Vec<&str>>().join(" ");
     if normalized.is_empty() {
         None
     } else {
@@ -1029,6 +1041,24 @@ fn truncate_text(input: &str, max_chars: usize) -> String {
     result
 }
 
+fn prepend_workdir_to_command(command: String, path: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        format!("cd /d {} && {command}", shell_quote(path))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        format!("cd {} && {command}", shell_quote(path))
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn shell_quote(path: &str) -> String {
+    format!("\"{}\"", path.replace('%', "%%").replace('"', "\\\""))
+}
+
+#[cfg(not(target_os = "windows"))]
 fn shell_quote(path: &str) -> String {
     format!("'{}'", path.replace('\'', "'\"'\"'"))
 }

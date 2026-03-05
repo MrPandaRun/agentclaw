@@ -264,7 +264,7 @@ impl ProviderAdapter for CodexAdapter {
 
         let mut command = format!("codex resume {}", shell_quote(&request.thread_id));
         if let Some(path) = project_path {
-            command = format!("cd {} && {command}", shell_quote(&path));
+            command = prepend_workdir_to_command(command, &path);
         }
 
         Ok(ResumeThreadResult {
@@ -342,7 +342,10 @@ fn load_codex_thread_titles(codex_home_dir: &Path) -> HashMap<String, String> {
     titles
 }
 
-fn parse_thread_file(path: &Path, official_titles: &HashMap<String, String>) -> Option<ThreadRecord> {
+fn parse_thread_file(
+    path: &Path,
+    official_titles: &HashMap<String, String>,
+) -> Option<ThreadRecord> {
     let file = File::open(path).ok()?;
     let reader = BufReader::new(file);
 
@@ -477,10 +480,14 @@ fn resolve_canonical_session_id(
         }
     }
 
-    if let Some((session_id, _)) = session_id_stats.iter().max_by(|(left_id, left_stats), (right_id, right_stats)| {
-        compare_session_id_stats(left_stats, right_stats)
-            .then_with(|| right_id.cmp(left_id))
-    }) {
+    if let Some((session_id, _)) =
+        session_id_stats
+            .iter()
+            .max_by(|(left_id, left_stats), (right_id, right_stats)| {
+                compare_session_id_stats(left_stats, right_stats)
+                    .then_with(|| right_id.cmp(left_id))
+            })
+    {
         return Some(session_id.clone());
     }
 
@@ -751,10 +758,7 @@ fn is_internal_instruction_text(raw: &str) -> bool {
 }
 
 fn normalize_preview_text(raw: &str) -> Option<String> {
-    let normalized = raw
-        .split_whitespace()
-        .collect::<Vec<&str>>()
-        .join(" ");
+    let normalized = raw.split_whitespace().collect::<Vec<&str>>().join(" ");
     if normalized.is_empty() {
         None
     } else {
@@ -859,6 +863,24 @@ fn default_home_dir() -> Option<PathBuf> {
     Some(PathBuf::from(combined))
 }
 
+fn prepend_workdir_to_command(command: String, path: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        format!("cd /d {} && {command}", shell_quote(path))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        format!("cd {} && {command}", shell_quote(path))
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn shell_quote(path: &str) -> String {
+    format!("\"{}\"", path.replace('%', "%%").replace('"', "\\\""))
+}
+
+#[cfg(not(target_os = "windows"))]
 fn shell_quote(path: &str) -> String {
     format!("'{}'", path.replace('\'', "'\"'\"'"))
 }
@@ -1137,7 +1159,10 @@ mod tests {
             .expect("list_threads should work");
 
         assert_eq!(threads.len(), 1);
-        assert_eq!(threads[0].title, "Align thread title with official Codex behavior");
+        assert_eq!(
+            threads[0].title,
+            "Align thread title with official Codex behavior"
+        );
     }
 
     #[test]
@@ -1165,7 +1190,10 @@ mod tests {
             .expect("list_threads should work");
 
         assert_eq!(threads.len(), 1);
-        assert_eq!(threads[0].title, "Stabilize codex thread title extraction rules");
+        assert_eq!(
+            threads[0].title,
+            "Stabilize codex thread title extraction rules"
+        );
     }
 
     #[test]

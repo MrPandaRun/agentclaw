@@ -1,4 +1,5 @@
 mod ccswitch;
+mod command_utils;
 mod commands;
 mod mcp;
 mod open_targets;

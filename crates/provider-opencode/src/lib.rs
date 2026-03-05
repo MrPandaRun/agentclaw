@@ -295,9 +295,13 @@ impl ProviderAdapter for OpenCodeAdapter {
                 }
             });
 
-        let mut command = format!("{} --session {}", self.opencode_binary(), request.thread_id);
+        let mut command = format!(
+            "{} --session {}",
+            self.opencode_binary(),
+            shell_quote(&request.thread_id)
+        );
         if let Some(path) = project_path {
-            command = format!("cd {} && {command}", shell_quote(&path));
+            command = prepend_workdir_to_command(command, &path);
         }
 
         Ok(ResumeThreadResult {
@@ -514,7 +518,11 @@ fn build_first_user_thread_title(storage_dir: &Path, session_id: &str) -> Option
         if let Some(text) = find_first_text_part(storage_dir, &node.id) {
             return Some(truncate_text(&text, 72));
         }
-        if let Some(summary_title) = node.summary_title.as_deref().and_then(normalize_preview_text) {
+        if let Some(summary_title) = node
+            .summary_title
+            .as_deref()
+            .and_then(normalize_preview_text)
+        {
             return Some(truncate_text(&summary_title, 72));
         }
     }
@@ -676,7 +684,11 @@ fn build_last_message_preview(storage_dir: &Path, session_id: &str) -> Option<St
             last_preview = Some(text);
         } else if node.role == "user" {
             // Fallback to summary title for user messages.
-            if let Some(title) = node.summary_title.as_deref().and_then(normalize_preview_text) {
+            if let Some(title) = node
+                .summary_title
+                .as_deref()
+                .and_then(normalize_preview_text)
+            {
                 last_preview = Some(title);
             }
         }
@@ -772,7 +784,11 @@ fn find_first_text_part(storage_dir: &Path, message_id: &str) -> Option<String> 
         if parsed.get("type").and_then(Value::as_str) != Some("text") {
             continue;
         }
-        if let Some(text) = parsed.get("text").and_then(Value::as_str).and_then(normalize_preview_text) {
+        if let Some(text) = parsed
+            .get("text")
+            .and_then(Value::as_str)
+            .and_then(normalize_preview_text)
+        {
             return Some(text);
         }
     }
@@ -781,10 +797,7 @@ fn find_first_text_part(storage_dir: &Path, message_id: &str) -> Option<String> 
 }
 
 fn normalize_preview_text(raw: &str) -> Option<String> {
-    let normalized = raw
-        .split_whitespace()
-        .collect::<Vec<&str>>()
-        .join(" ");
+    let normalized = raw.split_whitespace().collect::<Vec<&str>>().join(" ");
     if normalized.is_empty() {
         None
     } else {
@@ -906,6 +919,24 @@ fn default_opencode_data_dir() -> Option<PathBuf> {
     default_home_dir().map(|home| home.join(".local").join("share").join("opencode"))
 }
 
+fn prepend_workdir_to_command(command: String, path: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        format!("cd /d {} && {command}", shell_quote(path))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        format!("cd {} && {command}", shell_quote(path))
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn shell_quote(path: &str) -> String {
+    format!("\"{}\"", path.replace('%', "%%").replace('"', "\\\""))
+}
+
+#[cfg(not(target_os = "windows"))]
 fn shell_quote(path: &str) -> String {
     format!("'{}'", path.replace('\'', "'\"'\"'"))
 }

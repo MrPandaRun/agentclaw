@@ -9,6 +9,7 @@ use std::thread;
 use std::time::Duration;
 use tauri::Emitter;
 
+use crate::command_utils::command_available;
 use crate::payloads::{
     EmbeddedTerminalExitPayload, EmbeddedTerminalOutputPayload, OpenThreadInTerminalResponse,
     StartEmbeddedTerminalResponse,
@@ -78,7 +79,7 @@ pub fn open_thread_in_happy(
 }
 
 pub fn is_happy_installed() -> Result<bool, String> {
-    command_available("happy")
+    Ok(command_available("happy"))
 }
 
 pub fn start_embedded_terminal(
@@ -251,12 +252,9 @@ fn create_embedded_session(
         })
         .map_err(|error| format!("Failed to allocate PTY: {error}"))?;
 
-    let mut cmd = CommandBuilder::new("sh");
-    cmd.arg("-lc");
-    cmd.arg(command);
-    // Keep env close to macOS Terminal defaults so CLI color heuristics match.
+    let mut cmd = build_embedded_shell_command(command);
     cmd.env("TERM", "xterm-256color");
-    cmd.env("TERM_PROGRAM", "Apple_Terminal");
+    cmd.env("TERM_PROGRAM", embedded_term_program());
     cmd.env("COLORFGBG", colorfgbg_for_theme(terminal_theme));
     cmd.env("COLUMNS", cols.to_string());
     cmd.env("LINES", rows.to_string());
@@ -280,6 +278,37 @@ fn create_embedded_session(
         master: Mutex::new(pair.master),
     });
     Ok((reader, session))
+}
+
+#[cfg(target_os = "windows")]
+fn build_embedded_shell_command(command: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd.exe");
+    cmd.arg("/C");
+    cmd.arg(command);
+    cmd
+}
+
+#[cfg(not(target_os = "windows"))]
+fn build_embedded_shell_command(command: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-lc");
+    cmd.arg(command);
+    cmd
+}
+
+#[cfg(target_os = "windows")]
+fn embedded_term_program() -> &'static str {
+    "Windows_Command_Prompt"
+}
+
+#[cfg(target_os = "macos")]
+fn embedded_term_program() -> &'static str {
+    "Apple_Terminal"
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn embedded_term_program() -> &'static str {
+    "AgentDock_Embedded"
 }
 
 fn colorfgbg_for_theme(terminal_theme: Option<&str>) -> &'static str {
@@ -431,17 +460,7 @@ fn build_resume_command_from_parts(
         ProviderId::Codex => format!("codex resume {}", shell_quote(thread_id)),
         ProviderId::OpenCode => format!("opencode --session {}", shell_quote(thread_id)),
     };
-    let resume = apply_env_and_profile_to_command(resume_base, env, profile_name);
-
-    let project_path = project_path
-        .map(str::trim)
-        .filter(|path| !path.is_empty() && *path != ".");
-
-    if let Some(path) = project_path {
-        return format!("cd {} && {resume}", shell_quote(path));
-    }
-
-    resume
+    apply_env_and_profile_to_command(resume_base, env, profile_name, project_path)
 }
 
 fn build_new_thread_command_from_parts(
@@ -455,24 +474,19 @@ fn build_new_thread_command_from_parts(
         ProviderId::Codex => "codex".to_string(),
         ProviderId::OpenCode => "opencode".to_string(),
     };
-    let start = apply_env_and_profile_to_command(start_base, env, profile_name);
-
-    let project_path = project_path
-        .map(str::trim)
-        .filter(|path| !path.is_empty() && *path != ".");
-
-    if let Some(path) = project_path {
-        return format!("cd {} && {start}", shell_quote(path));
-    }
-
-    start
+    apply_env_and_profile_to_command(start_base, env, profile_name, project_path)
 }
 
 fn apply_env_and_profile_to_command(
     command: String,
     env: Option<&HashMap<String, String>>,
     profile_name: Option<&str>,
+    project_path: Option<&str>,
 ) -> String {
+    let project_path = project_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty() && *path != ".");
+
     let mut entries = Vec::new();
     if let Some(env) = env {
         let mut keys = env.keys().collect::<Vec<_>>();
@@ -497,16 +511,42 @@ fn apply_env_and_profile_to_command(
         ));
     }
 
-    if entries.is_empty() {
-        return command;
+    #[cfg(target_os = "windows")]
+    {
+        let mut segments = Vec::new();
+        if let Some(path) = project_path {
+            segments.push(format!("cd /d {}", shell_quote(path)));
+        }
+        for (key, value) in entries {
+            segments.push(format!(
+                "set \"{}={}\"",
+                escape_cmd_fragment(&key),
+                escape_cmd_fragment(&value)
+            ));
+        }
+        segments.push(command);
+        return segments.join(" && ");
     }
 
-    let prefix = entries
-        .iter()
-        .map(|(key, value)| format!("{key}={}", shell_quote(value)))
-        .collect::<Vec<_>>()
-        .join(" ");
-    format!("{prefix} {command}")
+    #[cfg(not(target_os = "windows"))]
+    {
+        let with_env = if entries.is_empty() {
+            command
+        } else {
+            let prefix = entries
+                .iter()
+                .map(|(key, value)| format!("{key}={}", shell_quote(value)))
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!("{prefix} {command}")
+        };
+
+        if let Some(path) = project_path {
+            format!("cd {} && {with_env}", shell_quote(path))
+        } else {
+            with_env
+        }
+    }
 }
 
 fn build_happy_command_from_parts(
@@ -536,19 +576,16 @@ fn build_happy_command_from_parts(
         }
     };
 
-    let project_path = project_path
-        .map(str::trim)
-        .filter(|path| !path.is_empty() && *path != ".");
-
-    if let Some(path) = project_path {
-        return Ok(format!("cd {} && {command}", shell_quote(path)));
-    }
-
-    Ok(command)
+    Ok(apply_env_and_profile_to_command(
+        command,
+        None,
+        None,
+        project_path,
+    ))
 }
 
 fn ensure_command_available(command: &str, command_label: &str) -> Result<(), String> {
-    let available = command_available(command)?;
+    let available = command_available(command);
     if available {
         return Ok(());
     }
@@ -556,18 +593,6 @@ fn ensure_command_available(command: &str, command_label: &str) -> Result<(), St
     Err(format!(
         "{command_label} is not available in PATH. Install it first, then retry."
     ))
-}
-
-fn command_available(command: &str) -> Result<bool, String> {
-    let output = Command::new("sh")
-        .arg("-lc")
-        .arg(format!(
-            "command -v {} >/dev/null 2>&1",
-            shell_quote(command)
-        ))
-        .output()
-        .map_err(|error| format!("Failed to check command availability: {error}"))?;
-    Ok(output.status.success())
 }
 
 #[cfg(target_os = "macos")]
@@ -591,17 +616,49 @@ fn launch_in_terminal(command: &str) -> Result<(), String> {
     Err(format!("Failed to launch Terminal with command: {detail}"))
 }
 
-#[cfg(not(target_os = "macos"))]
-fn launch_in_terminal(_command: &str) -> Result<(), String> {
-    Err("Terminal launch is only supported on macOS for now".to_string())
+#[cfg(target_os = "windows")]
+fn launch_in_terminal(command: &str) -> Result<(), String> {
+    let output = Command::new("cmd")
+        .arg("/C")
+        .arg("start")
+        .arg("")
+        .arg("cmd")
+        .arg("/K")
+        .arg(command)
+        .output()
+        .map_err(|error| format!("Failed to launch Command Prompt: {error}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(format!("Failed to launch terminal with command: {detail}"))
 }
 
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+fn launch_in_terminal(_command: &str) -> Result<(), String> {
+    Err("Terminal launch is only supported on macOS and Windows for now".to_string())
+}
+
+#[cfg(target_os = "macos")]
 fn escape_applescript(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+#[cfg(target_os = "windows")]
+fn shell_quote(value: &str) -> String {
+    format!("\"{}\"", escape_cmd_fragment(value))
+}
+
+#[cfg(not(target_os = "windows"))]
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+#[cfg(target_os = "windows")]
+fn escape_cmd_fragment(value: &str) -> String {
+    value.replace('%', "%%").replace('"', "\\\"")
 }
 
 #[cfg(test)]
@@ -624,10 +681,17 @@ mod tests {
             None,
             Some("/tmp/my project"),
         );
-        assert_eq!(
-            command,
-            "cd '/tmp/my project' && claude --resume 'thread id'"
-        );
+        if cfg!(target_os = "windows") {
+            assert_eq!(
+                command,
+                "cd /d \"/tmp/my project\" && claude --resume \"thread id\""
+            );
+        } else {
+            assert_eq!(
+                command,
+                "cd '/tmp/my project' && claude --resume 'thread id'"
+            );
+        }
     }
 
     #[test]
@@ -645,17 +709,28 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(
-            command,
-            "AGENTDOCK_ACTIVE_PROFILE='work' codex resume 'thread-id'"
-        );
+        if cfg!(target_os = "windows") {
+            assert_eq!(
+                command,
+                "set \"AGENTDOCK_ACTIVE_PROFILE=work\" && codex resume \"thread-id\""
+            );
+        } else {
+            assert_eq!(
+                command,
+                "AGENTDOCK_ACTIVE_PROFILE='work' codex resume 'thread-id'"
+            );
+        }
     }
 
     #[test]
     fn build_new_thread_command_includes_profile_env_when_provided() {
         let command =
             build_new_thread_command_from_parts(ProviderId::ClaudeCode, Some("demo"), None, None);
-        assert_eq!(command, "AGENTDOCK_ACTIVE_PROFILE='demo' claude");
+        if cfg!(target_os = "windows") {
+            assert_eq!(command, "set \"AGENTDOCK_ACTIVE_PROFILE=demo\" && claude");
+        } else {
+            assert_eq!(command, "AGENTDOCK_ACTIVE_PROFILE='demo' claude");
+        }
     }
 
     #[test]
@@ -672,10 +747,17 @@ mod tests {
             Some(&env),
             None,
         );
-        assert_eq!(
-            command,
-            "OPENAI_API_KEY='sk-test' OPENAI_BASE_URL='https://proxy.example.com' AGENTDOCK_ACTIVE_PROFILE='team-profile' codex"
-        );
+        if cfg!(target_os = "windows") {
+            assert_eq!(
+                command,
+                "set \"OPENAI_API_KEY=sk-test\" && set \"OPENAI_BASE_URL=https://proxy.example.com\" && set \"AGENTDOCK_ACTIVE_PROFILE=team-profile\" && codex"
+            );
+        } else {
+            assert_eq!(
+                command,
+                "OPENAI_API_KEY='sk-test' OPENAI_BASE_URL='https://proxy.example.com' AGENTDOCK_ACTIVE_PROFILE='team-profile' codex"
+            );
+        }
     }
 
     #[test]
@@ -686,7 +768,14 @@ mod tests {
             Some("/tmp/proj"),
         )
         .expect("happy command should be built");
-        assert_eq!(command, "cd '/tmp/proj' && happy --resume 'thread-id'");
+        if cfg!(target_os = "windows") {
+            assert_eq!(
+                command,
+                "cd /d \"/tmp/proj\" && happy --resume \"thread-id\""
+            );
+        } else {
+            assert_eq!(command, "cd '/tmp/proj' && happy --resume 'thread-id'");
+        }
     }
 
     #[test]
@@ -708,7 +797,11 @@ mod tests {
 
     #[test]
     fn shell_quote_escapes_single_quotes() {
-        assert_eq!(shell_quote("a'b"), "'a'\"'\"'b'");
+        if cfg!(target_os = "windows") {
+            assert_eq!(shell_quote("a'b"), "\"a'b\"");
+        } else {
+            assert_eq!(shell_quote("a'b"), "'a'\"'\"'b'");
+        }
     }
 
     #[test]
