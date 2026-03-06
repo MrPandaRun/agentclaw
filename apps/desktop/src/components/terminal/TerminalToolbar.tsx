@@ -1,4 +1,10 @@
-import { CircleHelp, Ellipsis, Loader2, RefreshCw, Smartphone } from "lucide-react";
+import {
+  CircleHelp,
+  Ellipsis,
+  Loader2,
+  RefreshCw,
+  Smartphone,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
@@ -87,7 +93,7 @@ export function TerminalToolbar({
         ) : (
           <RefreshCw className="h-3 w-3" />
         )}
-        Refresh
+        Rerun
       </Button>
       <Button
         ref={helpButtonRef}
@@ -141,7 +147,9 @@ export function TerminalToolbar({
                 setMoreOpen(false);
                 onOpenHappy();
               }}
-              disabled={isOpeningHappy || isRefreshing || starting || isSwitchingThread}
+              disabled={
+                isOpeningHappy || isRefreshing || starting || isSwitchingThread
+              }
               role="menuitem"
             >
               {isOpeningHappy ? (

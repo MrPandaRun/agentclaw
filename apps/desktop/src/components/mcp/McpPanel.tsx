@@ -144,7 +144,13 @@ function safeParseJsonArray(raw: string): string[] {
       return [];
     }
     return parsed
-      .filter((item): item is string => typeof item === "string")
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (typeof item === "number" || typeof item === "boolean")
+          return String(item);
+        return null;
+      })
+      .filter((item): item is string => item !== null)
       .map((item) => item.trim())
       .filter((item) => item.length > 0);
   } catch {
@@ -160,9 +166,13 @@ function safeParseJsonObject(raw: string): Record<string, string> {
     }
 
     const next: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
       if (typeof value === "string") {
         next[key] = value;
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        next[key] = String(value);
       }
     }
     return next;
@@ -177,10 +187,13 @@ function parseStringMap(value: unknown, field: string): Record<string, string> {
   }
   const next: Record<string, string> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof entry !== "string") {
-      throw new Error(`${field}.${key} 必须是字符串`);
+    if (typeof entry === "string") {
+      next[key] = entry;
+    } else if (typeof entry === "number" || typeof entry === "boolean") {
+      next[key] = String(entry);
+    } else {
+      throw new Error(`${field}.${key} 必须是字符串、数字或布尔值`);
     }
-    next[key] = entry;
   }
   return next;
 }
@@ -191,15 +204,21 @@ function parseStringArray(value: unknown, field: string): string[] {
   }
   const next: string[] = [];
   for (const item of value) {
-    if (typeof item !== "string") {
-      throw new Error(`${field} 必须是字符串数组`);
+    if (typeof item === "string") {
+      next.push(item);
+    } else if (typeof item === "number" || typeof item === "boolean") {
+      next.push(String(item));
+    } else {
+      throw new Error(`${field} 必须是仅包含字符串、数字或布尔值的数组`);
     }
-    next.push(item);
   }
   return next;
 }
 
-function parseConfigJsonToDraft(base: McpDraftInput, raw: string): McpDraftInput {
+function parseConfigJsonToDraft(
+  base: McpDraftInput,
+  raw: string,
+): McpDraftInput {
   const trimmed = raw.trim();
   if (!trimmed) {
     throw new Error("配置 JSON 不能为空");
@@ -279,7 +298,8 @@ function parseConfigJsonToDraft(base: McpDraftInput, raw: string): McpDraftInput
     next.headersJson = JSON.stringify(parseStringMap(headersValue, "headers"));
   }
 
-  const envValue = document.env !== undefined ? document.env : document.environment;
+  const envValue =
+    document.env !== undefined ? document.env : document.environment;
   if (envValue !== undefined) {
     next.envJson = JSON.stringify(parseStringMap(envValue, "env"));
   }
@@ -288,10 +308,11 @@ function parseConfigJsonToDraft(base: McpDraftInput, raw: string): McpDraftInput
     if (!Array.isArray(document.scopeProviders)) {
       throw new Error("scopeProviders 必须是数组");
     }
-    const scope = document.scopeProviders
-      .filter((item): item is ThreadProviderId => {
+    const scope = document.scopeProviders.filter(
+      (item): item is ThreadProviderId => {
         return typeof item === "string" && isThreadProviderId(item);
-      });
+      },
+    );
     next.scopeProviders = Array.from(new Set(scope));
   }
 
@@ -319,7 +340,9 @@ function parseConfigJsonToDraft(base: McpDraftInput, raw: string): McpDraftInput
   return next;
 }
 
-function buildFieldErrorMap(fieldErrors: McpFieldError[]): Record<string, string> {
+function buildFieldErrorMap(
+  fieldErrors: McpFieldError[],
+): Record<string, string> {
   const next: Record<string, string> = {};
   for (const fieldError of fieldErrors) {
     if (!next[fieldError.field]) {
@@ -329,7 +352,9 @@ function buildFieldErrorMap(fieldErrors: McpFieldError[]): Record<string, string
   return next;
 }
 
-function summarizeConfigFieldErrors(fieldErrors: Record<string, string>): string[] {
+function summarizeConfigFieldErrors(
+  fieldErrors: Record<string, string>,
+): string[] {
   const messages = Object.entries(fieldErrors)
     .filter(([field]) => CONFIG_ERROR_FIELDS.has(field))
     .map(([field, message]) => `${field}: ${message}`);
@@ -390,19 +415,29 @@ export function McpPanel() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<McpDraftInput>(createEmptyDraft());
-  const [configJson, setConfigJson] = useState<string>(toConfigJson(createEmptyDraft()));
+  const [configJson, setConfigJson] = useState<string>(
+    toConfigJson(createEmptyDraft()),
+  );
   const [configJsonError, setConfigJsonError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeTone, setNoticeTone] = useState<"success" | "error">("success");
-  const [testResult, setTestResult] = useState<McpConnectionTestResult | null>(null);
-  const [syncResult, setSyncResult] = useState<SyncMcpConfigsResponse | null>(null);
+  const [testResult, setTestResult] = useState<McpConnectionTestResult | null>(
+    null,
+  );
+  const [syncResult, setSyncResult] = useState<SyncMcpConfigsResponse | null>(
+    null,
+  );
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [wizardDraft, setWizardDraft] = useState<McpDraftInput>(createEmptyDraft());
+  const [wizardDraft, setWizardDraft] =
+    useState<McpDraftInput>(createEmptyDraft());
   const [deleting, setDeleting] = useState(false);
-  const [providerToggleKey, setProviderToggleKey] = useState<string | null>(null);
+  const [providerToggleKey, setProviderToggleKey] = useState<string | null>(
+    null,
+  );
   const configEditorDarkMode =
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark");
 
   const selectedServer = useMemo(
     () => servers.find((item) => item.id === selectedId) ?? null,
@@ -510,7 +545,7 @@ export function McpPanel() {
       return;
     }
 
-    setNotice(result.success ? "连接测试通过。" : "连接测试失败。请检查配置。")
+    setNotice(result.success ? "连接测试通过。" : "连接测试失败。请检查配置。");
     setNoticeTone(result.success ? "success" : "error");
   }, [applyConfigJson, draft, testConnection]);
 
@@ -532,7 +567,7 @@ export function McpPanel() {
       setConfigJson(toConfigJson(empty));
       setConfigJsonError(null);
       setFieldErrors({});
-      setNotice("删除成功，已自动同步。若失败会显示错误。")
+      setNotice("删除成功，已自动同步。若失败会显示错误。");
       setNoticeTone("success");
       setTestResult(null);
       setSyncResult(null);
@@ -584,7 +619,9 @@ export function McpPanel() {
 
   const handleToggleProviderFromList = useCallback(
     async (server: McpServer, provider: ThreadProviderId) => {
-      const currentScope = server.enabled ? parseProviderScope(server.scopeProviders) : [];
+      const currentScope = server.enabled
+        ? parseProviderScope(server.scopeProviders)
+        : [];
       const enabledForProvider = currentScope.includes(provider);
       const nextScope = enabledForProvider
         ? currentScope.filter((item) => item !== provider)
@@ -598,7 +635,8 @@ export function McpPanel() {
       setProviderToggleKey(`${server.id}:${provider}`);
       try {
         const response = await saveServer(nextDraft).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           setNotice(message || "变更 provider 启用状态失败。");
           setNoticeTone("error");
           return null;
@@ -640,9 +678,7 @@ export function McpPanel() {
     const result = await syncConfigs(parsedDraft.scopeProviders);
     setSyncResult(result);
     setNotice(
-      result.success
-        ? "手动同步完成。"
-        : result.message ?? "手动同步失败。",
+      result.success ? "手动同步完成。" : (result.message ?? "手动同步失败。"),
     );
     setNoticeTone(result.success ? "success" : "error");
     await loadServers();
@@ -716,7 +752,9 @@ export function McpPanel() {
                       className="min-w-0 flex-1 text-left"
                       onClick={() => handleSelectServer(server)}
                     >
-                      <p className="truncate text-xs font-medium">{server.name}</p>
+                      <p className="truncate text-xs font-medium">
+                        {server.name}
+                      </p>
                       <p className="truncate text-[11px] text-muted-foreground">
                         {formatTransport(server.transport)} · {server.target}
                       </p>
@@ -737,7 +775,12 @@ export function McpPanel() {
                                 : "border-border/70 bg-background/70 opacity-55 hover:opacity-90",
                             )}
                             disabled={saving || Boolean(providerToggleKey)}
-                            onClick={() => void handleToggleProviderFromList(server, provider)}
+                            onClick={() =>
+                              void handleToggleProviderFromList(
+                                server,
+                                provider,
+                              )
+                            }
                             title={`${providerDisplayName(provider)}: ${active ? "Enabled" : "Disabled"}`}
                           >
                             {toggling ? (
@@ -745,7 +788,10 @@ export function McpPanel() {
                             ) : (
                               <ProviderIcon
                                 providerId={provider}
-                                className={cn("h-3.5 w-3.5", active ? "opacity-100" : "opacity-60")}
+                                className={cn(
+                                  "h-3.5 w-3.5",
+                                  active ? "opacity-100" : "opacity-60",
+                                )}
                               />
                             )}
                           </button>
@@ -772,7 +818,10 @@ export function McpPanel() {
               type="text"
               value={draft.name}
               onChange={(event) => {
-                setDraft((current) => ({ ...current, name: event.target.value }));
+                setDraft((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }));
                 setFieldErrors((current) => {
                   if (!("name" in current)) {
                     return current;
@@ -786,13 +835,17 @@ export function McpPanel() {
               placeholder="Filesystem MCP"
             />
             {fieldErrors.name ? (
-              <span className="text-[11px] text-destructive">{fieldErrors.name}</span>
+              <span className="text-[11px] text-destructive">
+                {fieldErrors.name}
+              </span>
             ) : null}
           </label>
 
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground">Config JSON</span>
+              <span className="text-[11px] text-muted-foreground">
+                Config JSON
+              </span>
               <Button
                 type="button"
                 variant="ghost"
@@ -818,7 +871,8 @@ export function McpPanel() {
               }}
             />
             <p className="text-[11px] text-muted-foreground">
-              默认只维护 JSON。点击“配置向导”可用交互方式编辑，且会按 transport 自动显示/隐藏字段。
+              默认只维护 JSON。点击“配置向导”可用交互方式编辑，且会按 transport
+              自动显示/隐藏字段。
             </p>
             {configJsonError ? (
               <p className="text-[11px] text-destructive">{configJsonError}</p>
@@ -905,10 +959,13 @@ export function McpPanel() {
                 ) : (
                   <AlertTriangle className="h-3.5 w-3.5" />
                 )}
-                {testResult.success ? "Success" : "Failed"} · {testResult.durationMs}ms ·{" "}
+                {testResult.success ? "Success" : "Failed"} ·{" "}
+                {testResult.durationMs}ms ·{" "}
                 {formatDateTime(testResult.checkedAt)}
               </p>
-              {testResult.errorSummary ? <p>{testResult.errorSummary}</p> : null}
+              {testResult.errorSummary ? (
+                <p>{testResult.errorSummary}</p>
+              ) : null}
             </div>
           ) : null}
 
@@ -945,7 +1002,8 @@ export function McpPanel() {
                           : "text-destructive",
                       )}
                     >
-                      {item.providerId}: {item.message ?? (item.success ? "Synced" : "Failed")}
+                      {item.providerId}:{" "}
+                      {item.message ?? (item.success ? "Synced" : "Failed")}
                     </p>
                   ))}
                 </div>
@@ -966,7 +1024,9 @@ export function McpPanel() {
             </p>
           ) : null}
 
-          {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
+          {error ? (
+            <p className="text-[11px] text-destructive">{error}</p>
+          ) : null}
         </div>
       </div>
 
@@ -976,7 +1036,10 @@ export function McpPanel() {
         </p>
         <div className="max-h-48 space-y-1 overflow-y-auto">
           {logs.map((log) => (
-            <div key={log.id} className="rounded border border-border/60 px-2 py-1.5">
+            <div
+              key={log.id}
+              className="rounded border border-border/60 px-2 py-1.5"
+            >
               <p className="text-[11px] font-medium">
                 {log.action} · {log.actor}
               </p>
@@ -989,7 +1052,9 @@ export function McpPanel() {
             </div>
           ))}
           {logs.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">No audit events yet.</p>
+            <p className="text-[11px] text-muted-foreground">
+              No audit events yet.
+            </p>
           ) : null}
         </div>
       </div>
@@ -1019,7 +1084,9 @@ export function McpPanel() {
             <div className="space-y-3">
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1">
-                  <span className="text-[11px] text-muted-foreground">Transport</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Transport
+                  </span>
                   <select
                     value={wizardDraft.transport}
                     onChange={(event) =>
@@ -1037,11 +1104,15 @@ export function McpPanel() {
                 </label>
 
                 <label className="space-y-1">
-                  <span className="text-[11px] text-muted-foreground">Version</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Version
+                  </span>
                   <input
                     type="text"
                     value={wizardDraft.version}
-                    onChange={(event) => updateWizardField("version", event.target.value)}
+                    onChange={(event) =>
+                      updateWizardField("version", event.target.value)
+                    }
                     className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-primary"
                   />
                 </label>
@@ -1054,8 +1125,14 @@ export function McpPanel() {
                 <input
                   type="text"
                   value={wizardDraft.target}
-                  onChange={(event) => updateWizardField("target", event.target.value)}
-                  placeholder={wizardDraft.transport === "stdio" ? "npx" : "https://example.com/mcp"}
+                  onChange={(event) =>
+                    updateWizardField("target", event.target.value)
+                  }
+                  placeholder={
+                    wizardDraft.transport === "stdio"
+                      ? "npx"
+                      : "https://example.com/mcp"
+                  }
                   className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-primary"
                 />
               </label>
@@ -1063,19 +1140,27 @@ export function McpPanel() {
               {wizardDraft.transport === "stdio" ? (
                 <>
                   <label className="space-y-1">
-                    <span className="text-[11px] text-muted-foreground">Args JSON</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Args JSON
+                    </span>
                     <textarea
                       value={wizardDraft.argsJson}
-                      onChange={(event) => updateWizardField("argsJson", event.target.value)}
+                      onChange={(event) =>
+                        updateWizardField("argsJson", event.target.value)
+                      }
                       className="h-24 w-full rounded-md border border-input bg-background px-2 py-1.5 font-mono text-[11px] outline-none focus:border-primary"
                     />
                   </label>
 
                   <label className="space-y-1">
-                    <span className="text-[11px] text-muted-foreground">Env JSON</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Env JSON
+                    </span>
                     <textarea
                       value={wizardDraft.envJson}
-                      onChange={(event) => updateWizardField("envJson", event.target.value)}
+                      onChange={(event) =>
+                        updateWizardField("envJson", event.target.value)
+                      }
                       className="h-24 w-full rounded-md border border-input bg-background px-2 py-1.5 font-mono text-[11px] outline-none focus:border-primary"
                     />
                   </label>
@@ -1083,17 +1168,23 @@ export function McpPanel() {
               ) : (
                 <>
                   <label className="space-y-1">
-                    <span className="text-[11px] text-muted-foreground">Headers JSON</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Headers JSON
+                    </span>
                     <textarea
                       value={wizardDraft.headersJson}
-                      onChange={(event) => updateWizardField("headersJson", event.target.value)}
+                      onChange={(event) =>
+                        updateWizardField("headersJson", event.target.value)
+                      }
                       className="h-24 w-full rounded-md border border-input bg-background px-2 py-1.5 font-mono text-[11px] outline-none focus:border-primary"
                     />
                   </label>
 
                   <div className="grid gap-2 sm:grid-cols-2">
                     <label className="space-y-1">
-                      <span className="text-[11px] text-muted-foreground">Secret Header</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Secret Header
+                      </span>
                       <input
                         type="text"
                         value={wizardDraft.secretHeaderName ?? ""}
@@ -1107,14 +1198,18 @@ export function McpPanel() {
                       />
                     </label>
                     <label className="space-y-1">
-                      <span className="text-[11px] text-muted-foreground">Secret Token</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Secret Token
+                      </span>
                       <input
                         type="password"
                         value={wizardDraft.secretToken ?? ""}
                         onChange={(event) =>
                           updateWizardField("secretToken", event.target.value)
                         }
-                        placeholder={selectedServer?.hasSecret ? "留空则保持" : "可选"}
+                        placeholder={
+                          selectedServer?.hasSecret ? "留空则保持" : "可选"
+                        }
                         className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-primary"
                       />
                     </label>
@@ -1126,12 +1221,15 @@ export function McpPanel() {
                 <p className="text-[11px] text-muted-foreground">Providers</p>
                 <div className="flex flex-wrap gap-2">
                   {PROVIDERS.map((provider) => {
-                    const active = wizardDraft.scopeProviders.includes(provider);
+                    const active =
+                      wizardDraft.scopeProviders.includes(provider);
                     return (
                       <button
                         key={provider}
                         type="button"
-                        onClick={() => toggleWizardScopeProvider(provider, !active)}
+                        onClick={() =>
+                          toggleWizardScopeProvider(provider, !active)
+                        }
                         className={cn(
                           "rounded-full border px-2 py-1 text-[11px]",
                           active
@@ -1149,7 +1247,9 @@ export function McpPanel() {
               <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <Switch
                   checked={wizardDraft.enabled}
-                  onCheckedChange={(checked) => updateWizardField("enabled", checked)}
+                  onCheckedChange={(checked) =>
+                    updateWizardField("enabled", checked)
+                  }
                 />
                 Enabled
               </label>

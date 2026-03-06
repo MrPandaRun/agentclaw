@@ -15,6 +15,7 @@ import {
   Package,
   Plus,
   RefreshCw,
+  Search,
   ServerCog,
   Settings2,
   Sun,
@@ -43,7 +44,11 @@ import {
   providerDisplayName,
   providerInstallGuideUrl,
 } from "@/lib/provider";
-import { normalizeProjectPath, formatLastActive, threadPreview } from "@/lib/thread";
+import {
+  normalizeProjectPath,
+  formatLastActive,
+  threadPreview,
+} from "@/lib/thread";
 import { cn } from "@/lib/utils";
 import type {
   AgentRuntimeSettings,
@@ -244,7 +249,8 @@ const SUPPLIER_PRESETS: Record<ThreadProviderId, SupplierPreset[]> = {
       description: "KAT-Coder gateway template; replace ENDPOINT_ID.",
       name: "KAT-Coder",
       profileName: "kat-coder",
-      baseUrl: "https://vanchin.streamlake.ai/api/gateway/v1/endpoints/${ENDPOINT_ID}/claude-code-proxy",
+      baseUrl:
+        "https://vanchin.streamlake.ai/api/gateway/v1/endpoints/${ENDPOINT_ID}/claude-code-proxy",
       docsUrl: "https://console.streamlake.ai",
     },
     {
@@ -395,7 +401,8 @@ const SUPPLIER_PRESETS: Record<ThreadProviderId, SupplierPreset[]> = {
       name: "Azure OpenAI",
       profileName: "azure-openai",
       baseUrl: "https://YOUR_RESOURCE_NAME.openai.azure.com/openai",
-      docsUrl: "https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/codex",
+      docsUrl:
+        "https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/codex",
     },
     {
       id: "codex-aihubmix",
@@ -585,7 +592,8 @@ const SUPPLIER_PRESETS: Record<ThreadProviderId, SupplierPreset[]> = {
       description: "KAT-Coder gateway template; replace ENDPOINT_ID.",
       name: "KAT-Coder",
       profileName: "kat-coder",
-      baseUrl: "https://vanchin.streamlake.ai/api/gateway/v1/endpoints/${ENDPOINT_ID}/openai",
+      baseUrl:
+        "https://vanchin.streamlake.ai/api/gateway/v1/endpoints/${ENDPOINT_ID}/openai",
       docsUrl: "https://console.streamlake.ai",
     },
     {
@@ -943,7 +951,9 @@ requires_openai_auth = true`;
   }
 
   const baseUrl = preset.baseUrl ?? "https://api.openai.com/v1";
-  const providerKey = sanitizeCodexProviderKey(preset.profileName || preset.name);
+  const providerKey = sanitizeCodexProviderKey(
+    preset.profileName || preset.name,
+  );
   const model = CODEX_MODEL_BY_PRESET_ID[preset.id] ?? "gpt-5.2";
   return JSON.stringify(
     buildCodexConfigObject(providerKey, preset.name, baseUrl, model),
@@ -1033,7 +1043,10 @@ const CONFIG_TEMPLATE: Record<ThreadProviderId, Record<string, unknown>> = {
   ),
 };
 
-function emptyProviderInstallStatusMap(): Record<ThreadProviderId, ProviderInstallStatus | null> {
+function emptyProviderInstallStatusMap(): Record<
+  ThreadProviderId,
+  ProviderInstallStatus | null
+> {
   return {
     claude_code: null,
     codex: null,
@@ -1085,7 +1098,9 @@ function providerStatusLabel(
   if (!status.installed) {
     return "Not Installed";
   }
-  return status.healthStatus === "degraded" ? "Installed (Setup Needed)" : "Installed";
+  return status.healthStatus === "degraded"
+    ? "Installed (Setup Needed)"
+    : "Installed";
 }
 
 function providerStatusClass(
@@ -1104,11 +1119,15 @@ function providerStatusClass(
   return "text-emerald-600 dark:text-emerald-400";
 }
 
-function cloneAgentRuntimeSettings(settings: AgentRuntimeSettings): AgentRuntimeSettings {
+function cloneAgentRuntimeSettings(
+  settings: AgentRuntimeSettings,
+): AgentRuntimeSettings {
   return JSON.parse(JSON.stringify(settings)) as AgentRuntimeSettings;
 }
 
-function normalizeOptionalText(value: string | null | undefined): string | undefined {
+function normalizeOptionalText(
+  value: string | null | undefined,
+): string | undefined {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
@@ -1130,12 +1149,20 @@ function sanitizeSupplierIdSegment(raw: string): string {
   return normalized || "imported";
 }
 
-function importedSupplierId(providerId: ThreadProviderId, sourceId: string): string {
+function importedSupplierId(
+  providerId: ThreadProviderId,
+  sourceId: string,
+): string {
   return `custom-ccswitch-${providerId}-${sanitizeSupplierIdSegment(sourceId)}`;
 }
 
-function nextSupplierName(baseName: string, suppliers: AgentSupplier[]): string {
-  const usedNames = new Set(suppliers.map((supplier) => supplier.name.trim().toLowerCase()));
+function nextSupplierName(
+  baseName: string,
+  suppliers: AgentSupplier[],
+): string {
+  const usedNames = new Set(
+    suppliers.map((supplier) => supplier.name.trim().toLowerCase()),
+  );
   if (!usedNames.has(baseName.trim().toLowerCase())) {
     return baseName;
   }
@@ -1240,9 +1267,9 @@ function validateConfigJson(
     const parsedRecord = parsed as Record<string, unknown>;
     if (
       parsedRecord.env !== undefined &&
-      (typeof parsedRecord.env !== "object"
-        || parsedRecord.env === null
-        || Array.isArray(parsedRecord.env))
+      (typeof parsedRecord.env !== "object" ||
+        parsedRecord.env === null ||
+        Array.isArray(parsedRecord.env))
     ) {
       return {
         isValid: false,
@@ -1253,9 +1280,9 @@ function validateConfigJson(
     if (providerId === "codex") {
       const auth = asJsonRecord(parsedRecord.auth);
       const hasCodexConfig =
-        auth !== null
-        || typeof parsedRecord.config === "string"
-        || asJsonRecord(parsedRecord.config) !== null;
+        auth !== null ||
+        typeof parsedRecord.config === "string" ||
+        asJsonRecord(parsedRecord.config) !== null;
       return {
         isValid: true,
         message: hasCodexConfig
@@ -1265,11 +1292,12 @@ function validateConfigJson(
     }
 
     if (providerId === "opencode") {
-      const opencodeConfig = asJsonRecord(parsedRecord.settingsConfig) ?? parsedRecord;
+      const opencodeConfig =
+        asJsonRecord(parsedRecord.settingsConfig) ?? parsedRecord;
       const hasOpenCodeShape =
-        typeof opencodeConfig.npm === "string"
-        && asJsonRecord(opencodeConfig.options) !== null
-        && asJsonRecord(opencodeConfig.models) !== null;
+        typeof opencodeConfig.npm === "string" &&
+        asJsonRecord(opencodeConfig.options) !== null &&
+        asJsonRecord(opencodeConfig.models) !== null;
       return {
         isValid: true,
         message: hasOpenCodeShape
@@ -1296,7 +1324,9 @@ function resolveProviderActiveProfile(
 ): string {
   const suppliers = settings.suppliersByProvider[providerId] ?? [];
   const activeSupplierId = settings.activeSupplierIds[providerId];
-  const activeSupplier = suppliers.find((supplier) => supplier.id === activeSupplierId);
+  const activeSupplier = suppliers.find(
+    (supplier) => supplier.id === activeSupplierId,
+  );
   return activeSupplier?.profileName ?? "default";
 }
 
@@ -1317,8 +1347,13 @@ export interface SidebarProps {
   agentRuntimeSettings: AgentRuntimeSettings;
   onLoadThreads: () => void;
   onSelectThread: (threadKey: string) => void;
-  onCreateThread: (projectPath: string, providerId: ThreadProviderId) => Promise<void>;
-  onAgentRuntimeSettingsChange: (selection: AgentRuntimeSettings) => string | null;
+  onCreateThread: (
+    projectPath: string,
+    providerId: ThreadProviderId,
+  ) => Promise<void>;
+  onAgentRuntimeSettingsChange: (
+    selection: AgentRuntimeSettings,
+  ) => string | null;
   onAppThemeChange: (theme: AppTheme) => void;
   onClearError: () => void;
 }
@@ -1345,6 +1380,7 @@ export function Sidebar({
   onAppThemeChange,
   onClearError,
 }: SidebarProps) {
+  const [searchQuery, setSearchQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
@@ -1354,13 +1390,21 @@ export function Sidebar({
   const [pendingActiveProviderId, setPendingActiveProviderId] =
     useState<ThreadProviderId>(activeProviderId);
   const [pendingRuntimeSettings, setPendingRuntimeSettings] =
-    useState<AgentRuntimeSettings>(cloneAgentRuntimeSettings(agentRuntimeSettings));
-  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(OFFICIAL_SUPPLIER_ID);
+    useState<AgentRuntimeSettings>(
+      cloneAgentRuntimeSettings(agentRuntimeSettings),
+    );
+  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(
+    OFFICIAL_SUPPLIER_ID,
+  );
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [configEditorNotice, setConfigEditorNotice] =
     useState<ConfigEditorNotice | null>(null);
-  const [accountDialogError, setAccountDialogError] = useState<string | null>(null);
-  const [ccSwitchImportNotice, setCcSwitchImportNotice] = useState<string | null>(null);
+  const [accountDialogError, setAccountDialogError] = useState<string | null>(
+    null,
+  );
+  const [ccSwitchImportNotice, setCcSwitchImportNotice] = useState<
+    string | null
+  >(null);
   const [ccSwitchImporting, setCcSwitchImporting] = useState(false);
 
   const [newThreadDialogOpen, setNewThreadDialogOpen] = useState(false);
@@ -1372,13 +1416,19 @@ export function Sidebar({
   const [createRequested, setCreateRequested] = useState(false);
   const [didObserveLaunchState, setDidObserveLaunchState] = useState(false);
   const [pickerError, setPickerError] = useState<string | null>(null);
-  const [createDialogError, setCreateDialogError] = useState<string | null>(null);
+  const [createDialogError, setCreateDialogError] = useState<string | null>(
+    null,
+  );
   const [providerInstallStatuses, setProviderInstallStatuses] = useState<
     Record<ThreadProviderId, ProviderInstallStatus | null>
   >(emptyProviderInstallStatusMap);
   const [providerStatusLoading, setProviderStatusLoading] = useState(false);
-  const [providerStatusError, setProviderStatusError] = useState<string | null>(null);
-  const [providerInstallGuideError, setProviderInstallGuideError] = useState<string | null>(null);
+  const [providerStatusError, setProviderStatusError] = useState<string | null>(
+    null,
+  );
+  const [providerInstallGuideError, setProviderInstallGuideError] = useState<
+    string | null
+  >(null);
 
   const settingsRef = useRef<HTMLDivElement | null>(null);
 
@@ -1387,13 +1437,16 @@ export function Sidebar({
     [folderGroups],
   );
 
-  const hasLaunchInFlight = hasPendingNewThreadLaunch || newThreadBindingStatus !== null;
+  const hasLaunchInFlight =
+    hasPendingNewThreadLaunch || newThreadBindingStatus !== null;
   const isCreateBusy = isPickingFolder || createRequested || hasLaunchInFlight;
 
   const selectedPathValue = sanitizeProjectPath(selectedProjectPath);
   const hasSelectedFolderInList = folderKeys.has(selectedPathValue);
-  const selectedProviderInstallStatus = providerInstallStatuses[selectedProviderId];
-  const selectedProviderInstalled = selectedProviderInstallStatus?.installed ?? true;
+  const selectedProviderInstallStatus =
+    providerInstallStatuses[selectedProviderId];
+  const selectedProviderInstalled =
+    selectedProviderInstallStatus?.installed ?? true;
   const selectedProviderStatusResolved =
     selectedProviderInstallStatus !== null || !providerStatusLoading;
   const canCreate =
@@ -1422,7 +1475,8 @@ export function Sidebar({
         const data = await invoke<ProviderInstallStatusPayload[]>(
           "list_provider_install_statuses",
           {
-            projectPath: normalizedProjectPath.length > 0 ? normalizedProjectPath : null,
+            projectPath:
+              normalizedProjectPath.length > 0 ? normalizedProjectPath : null,
           },
         );
 
@@ -1441,7 +1495,9 @@ export function Sidebar({
         setProviderInstallStatuses(nextStatuses);
       } catch (statusError) {
         const message =
-          statusError instanceof Error ? statusError.message : String(statusError);
+          statusError instanceof Error
+            ? statusError.message
+            : String(statusError);
         setProviderStatusError(message);
       } finally {
         setProviderStatusLoading(false);
@@ -1547,8 +1603,13 @@ export function Sidebar({
   useEffect(() => {
     if (!accountDialogOpen) {
       setPendingActiveProviderId(activeProviderId);
-      setPendingRuntimeSettings(cloneAgentRuntimeSettings(agentRuntimeSettings));
-      setEditingSupplierId(agentRuntimeSettings.activeSupplierIds[activeProviderId] ?? OFFICIAL_SUPPLIER_ID);
+      setPendingRuntimeSettings(
+        cloneAgentRuntimeSettings(agentRuntimeSettings),
+      );
+      setEditingSupplierId(
+        agentRuntimeSettings.activeSupplierIds[activeProviderId] ??
+          OFFICIAL_SUPPLIER_ID,
+      );
       setSelectedPresetId(firstPresetId(activeProviderId));
       setConfigEditorNotice(null);
       setAccountDialogError(null);
@@ -1570,7 +1631,9 @@ export function Sidebar({
       return;
     }
 
-    const hasSelectedPreset = presets.some((preset) => preset.id === selectedPresetId);
+    const hasSelectedPreset = presets.some(
+      (preset) => preset.id === selectedPresetId,
+    );
     if (!hasSelectedPreset) {
       setSelectedPresetId(presets[0].id);
     }
@@ -1628,22 +1691,53 @@ export function Sidebar({
   const activeProviderOption = THREAD_PROVIDER_OPTIONS.find(
     (option) => option.value === activeProviderId,
   );
+
+  const filteredFolderGroups = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return folderGroups;
+    }
+    const query = searchQuery.toLowerCase();
+    return folderGroups
+      .map((group) => {
+        const matchedThreads = group.threads.filter(
+          (t) =>
+            t.title.toLowerCase().includes(query) ||
+            (t.lastMessagePreview &&
+              t.lastMessagePreview.toLowerCase().includes(query)),
+        );
+        if (
+          matchedThreads.length > 0 ||
+          group.folderName.toLowerCase().includes(query)
+        ) {
+          return { ...group, threads: matchedThreads };
+        }
+        return null;
+      })
+      .filter((g) => g !== null);
+  }, [folderGroups, searchQuery]);
+
   const pendingActiveProviderOption = THREAD_PROVIDER_OPTIONS.find(
     (option) => option.value === pendingActiveProviderId,
   );
   const pendingProviderSuppliers =
     pendingRuntimeSettings.suppliersByProvider[pendingActiveProviderId] ?? [];
-  const pendingProviderPresets = SUPPLIER_PRESETS[pendingActiveProviderId] ?? [];
+  const pendingProviderPresets =
+    SUPPLIER_PRESETS[pendingActiveProviderId] ?? [];
   const pendingActiveSupplierId =
-    pendingRuntimeSettings.activeSupplierIds[pendingActiveProviderId] ?? OFFICIAL_SUPPLIER_ID;
+    pendingRuntimeSettings.activeSupplierIds[pendingActiveProviderId] ??
+    OFFICIAL_SUPPLIER_ID;
   const editingSupplier =
-    pendingProviderSuppliers.find((supplier) => supplier.id === editingSupplierId)
-    ?? pendingProviderSuppliers.find((supplier) => supplier.id === pendingActiveSupplierId)
-    ?? null;
+    pendingProviderSuppliers.find(
+      (supplier) => supplier.id === editingSupplierId,
+    ) ??
+    pendingProviderSuppliers.find(
+      (supplier) => supplier.id === pendingActiveSupplierId,
+    ) ??
+    null;
   const selectedPreset =
-    pendingProviderPresets.find((preset) => preset.id === selectedPresetId)
-    ?? pendingProviderPresets[0]
-    ?? null;
+    pendingProviderPresets.find((preset) => preset.id === selectedPresetId) ??
+    pendingProviderPresets[0] ??
+    null;
   const editingOfficialSupplier = editingSupplier?.kind === "official";
   const editingConfigValidation = validateConfigJson(
     pendingActiveProviderId,
@@ -1664,7 +1758,10 @@ export function Sidebar({
   const openAccountDialog = () => {
     setPendingActiveProviderId(activeProviderId);
     setPendingRuntimeSettings(cloneAgentRuntimeSettings(agentRuntimeSettings));
-    setEditingSupplierId(agentRuntimeSettings.activeSupplierIds[activeProviderId] ?? OFFICIAL_SUPPLIER_ID);
+    setEditingSupplierId(
+      agentRuntimeSettings.activeSupplierIds[activeProviderId] ??
+        OFFICIAL_SUPPLIER_ID,
+    );
     setSelectedPresetId(firstPresetId(activeProviderId));
     setConfigEditorNotice(null);
     setAccountDialogError(null);
@@ -1732,11 +1829,17 @@ export function Sidebar({
   };
 
   const addPendingPresetSupplier = () => {
-    if (!selectedPreset || selectedPreset.providerId !== pendingActiveProviderId) {
+    if (
+      !selectedPreset ||
+      selectedPreset.providerId !== pendingActiveProviderId
+    ) {
       return;
     }
 
-    const presetSupplier = createPresetSupplier(selectedPreset, pendingProviderSuppliers);
+    const presetSupplier = createPresetSupplier(
+      selectedPreset,
+      pendingProviderSuppliers,
+    );
     setPendingRuntimeSettings((current) => ({
       ...current,
       suppliersByProvider: {
@@ -1766,12 +1869,15 @@ export function Sidebar({
     setConfigEditorNotice(null);
 
     try {
-      const payload = await invoke<CcSwitchImportPayload>("import_ccswitch_suppliers");
+      const payload = await invoke<CcSwitchImportPayload>(
+        "import_ccswitch_suppliers",
+      );
       const importedSuppliers = payload.suppliers.filter(
         (
           supplier,
-        ): supplier is CcSwitchImportedSupplierPayload & { providerId: ThreadProviderId } =>
-          isSupportedProvider(supplier.providerId),
+        ): supplier is CcSwitchImportedSupplierPayload & {
+          providerId: ThreadProviderId;
+        } => isSupportedProvider(supplier.providerId),
       );
 
       if (importedSuppliers.length === 0) {
@@ -1784,22 +1890,27 @@ export function Sidebar({
       const nextSettings = cloneAgentRuntimeSettings(pendingRuntimeSettings);
       let addedCount = 0;
       let updatedCount = 0;
-      let firstImportedSelection: { providerId: ThreadProviderId; supplierId: string } | null =
-        null;
+      let firstImportedSelection: {
+        providerId: ThreadProviderId;
+        supplierId: string;
+      } | null = null;
 
       for (const imported of importedSuppliers) {
         const providerId = imported.providerId;
         const supplierId = importedSupplierId(providerId, imported.sourceId);
-        const suppliers = [...(nextSettings.suppliersByProvider[providerId] ?? [])];
+        const suppliers = [
+          ...(nextSettings.suppliersByProvider[providerId] ?? []),
+        ];
         const now = Date.now();
         const importedName =
-          normalizeOptionalText(imported.name)
-          ?? nextSupplierName("Imported Supplier", suppliers);
+          normalizeOptionalText(imported.name) ??
+          nextSupplierName("Imported Supplier", suppliers);
         const nextSupplier: AgentSupplier = {
           id: supplierId,
           kind: "custom",
           name: importedName,
-          note: normalizeOptionalText(imported.note) ?? "Imported from CC Switch",
+          note:
+            normalizeOptionalText(imported.note) ?? "Imported from CC Switch",
           profileName: normalizeProfileName(imported.profileName),
           baseUrl: normalizeOptionalText(imported.baseUrl),
           apiKey: normalizeOptionalText(imported.apiKey),
@@ -1807,7 +1918,9 @@ export function Sidebar({
           updatedAt: now,
         };
 
-        const existingIndex = suppliers.findIndex((supplier) => supplier.id === supplierId);
+        const existingIndex = suppliers.findIndex(
+          (supplier) => supplier.id === supplierId,
+        );
         if (existingIndex >= 0) {
           suppliers[existingIndex] = nextSupplier;
           updatedCount += 1;
@@ -1839,7 +1952,9 @@ export function Sidebar({
       );
     } catch (importError) {
       const message =
-        importError instanceof Error ? importError.message : String(importError);
+        importError instanceof Error
+          ? importError.message
+          : String(importError);
       setAccountDialogError(message);
     } finally {
       setCcSwitchImporting(false);
@@ -1943,7 +2058,9 @@ export function Sidebar({
   ) => {
     setPendingRuntimeSettings((current) => {
       const suppliers = current.suppliersByProvider[providerId] ?? [];
-      const nextSuppliers = suppliers.filter((supplier) => supplier.id !== supplierId);
+      const nextSuppliers = suppliers.filter(
+        (supplier) => supplier.id !== supplierId,
+      );
       const hasActiveSupplier = nextSuppliers.some(
         (supplier) => supplier.id === current.activeSupplierIds[providerId],
       );
@@ -1968,9 +2085,11 @@ export function Sidebar({
 
   const openNewThreadDialog = () => {
     const fallbackProjectPath =
-      (selectedFolderKey && selectedFolderKey !== "." ? selectedFolderKey : null)
-      ?? folderGroups[0]?.key
-      ?? "";
+      (selectedFolderKey && selectedFolderKey !== "."
+        ? selectedFolderKey
+        : null) ??
+      folderGroups[0]?.key ??
+      "";
 
     setSelectedProjectPath(fallbackProjectPath);
     setSelectedProviderId(activeProviderId);
@@ -2044,7 +2163,9 @@ export function Sidebar({
       await onCreateThread(projectPath, selectedProviderId);
     } catch (createError) {
       const message =
-        createError instanceof Error ? createError.message : String(createError);
+        createError instanceof Error
+          ? createError.message
+          : String(createError);
       setCreateDialogError(message);
       setCreateRequested(false);
     }
@@ -2076,23 +2197,42 @@ export function Sidebar({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 px-2.5 text-xs"
+            className="h-7 w-7 px-0"
             onClick={() => void onLoadThreads()}
             disabled={loadingThreads}
+            title="Refresh"
+            aria-label="Refresh threads"
           >
-            <RefreshCw className="mr-1.5 h-3 w-3" />
-            Refresh
+            <RefreshCw
+              className={cn(
+                "h-3.5 w-3.5",
+                loadingThreads ? "animate-spin" : "",
+              )}
+            />
           </Button>
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden py-2.5 pl-2.5 pr-2.5">
         <div className="flex min-h-0 flex-1 flex-col">
+          <div className="relative mb-2 pr-2">
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-[45%] text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-7 w-full rounded border border-input bg-transparent px-7 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
           <div className="mb-1.5 flex items-center justify-between px-0.5 pr-2.5">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Projects
             </p>
             <Badge variant="secondary" className="h-5 px-2 text-[10px]">
-              {folderGroups.length}
+              {filteredFolderGroups.reduce(
+                (acc, g) => acc + g.threads.length,
+                0,
+              )}
             </Badge>
           </div>
 
@@ -2100,9 +2240,10 @@ export function Sidebar({
             <p className="px-1.5 py-2 text-xs text-muted-foreground">
               Loading threads...
             </p>
-          ) : folderGroups.length === 0 ? (
+          ) : filteredFolderGroups.length === 0 ? (
             <p className="px-1.5 py-2 text-xs text-muted-foreground">
-              No sessions found in <code>~/.claude/projects</code>, <code>~/.codex/sessions</code>, or{" "}
+              No sessions found in <code>~/.claude/projects</code>,{" "}
+              <code>~/.codex/sessions</code>, or{" "}
               <code>~/.local/share/opencode/storage/session</code>.
             </p>
           ) : (
@@ -2125,7 +2266,7 @@ export function Sidebar({
               `}</style>
               <div className="sidebar-scroll h-full overflow-y-auto pr-2.5">
                 <ul className="w-full space-y-2 pb-1.5">
-                  {folderGroups.map((group) => (
+                  {filteredFolderGroups.map((group) => (
                     <ThreadFolderGroup
                       key={group.key}
                       group={group}
@@ -2171,7 +2312,8 @@ export function Sidebar({
                   Settings
                 </p>
                 <p className="px-1.5 pb-1 text-[10px] text-muted-foreground">
-                  Active: {activeProviderOption?.label ?? "Claude Code"} / {activeProfileName}
+                  Active: {activeProviderOption?.label ?? "Claude Code"} /{" "}
+                  {activeProfileName}
                 </p>
                 <Button
                   type="button"
@@ -2184,7 +2326,10 @@ export function Sidebar({
                     {activeProviderOption ? (
                       <ProviderIcon
                         providerId={activeProviderOption.value}
-                        className={cn("h-3.5 w-3.5", activeProviderOption.accentClass)}
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          activeProviderOption.accentClass,
+                        )}
                       />
                     ) : (
                       <ProviderIcon
@@ -2358,7 +2503,9 @@ export function Sidebar({
                     variant="ghost"
                     size="sm"
                     className="h-6 px-1.5 text-[10px]"
-                    onClick={() => void loadProviderInstallStatuses(selectedPathValue)}
+                    onClick={() =>
+                      void loadProviderInstallStatuses(selectedPathValue)
+                    }
                     disabled={isCreateBusy || providerStatusLoading}
                   >
                     {providerStatusLoading ? (
@@ -2397,7 +2544,10 @@ export function Sidebar({
                           <span
                             className={cn(
                               "text-[10px] font-medium",
-                              providerStatusClass(status, providerStatusLoading),
+                              providerStatusClass(
+                                status,
+                                providerStatusLoading,
+                              ),
                             )}
                           >
                             {providerStatusLabel(status, providerStatusLoading)}
@@ -2415,11 +2565,13 @@ export function Sidebar({
                   </p>
                 ) : null}
 
-                {selectedProviderInstallStatus && !selectedProviderInstallStatus.installed ? (
+                {selectedProviderInstallStatus &&
+                !selectedProviderInstallStatus.installed ? (
                   <div className="space-y-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-2">
                     <p className="inline-flex items-center gap-1.5 text-[11px] text-destructive">
                       <AlertTriangle className="h-3.5 w-3.5" />
-                      {providerDisplayName(selectedProviderId)} CLI is not installed.
+                      {providerDisplayName(selectedProviderId)} CLI is not
+                      installed.
                     </p>
                     {selectedProviderInstallStatus.message ? (
                       <p className="text-[11px] text-destructive/90">
@@ -2443,7 +2595,8 @@ export function Sidebar({
                 {selectedProviderInstallStatus?.installed &&
                 selectedProviderInstallStatus.healthStatus === "degraded" ? (
                   <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                    {selectedProviderInstallStatus.message ?? "Provider is installed but setup is incomplete."}
+                    {selectedProviderInstallStatus.message ??
+                      "Provider is installed but setup is incomplete."}
                   </p>
                 ) : null}
 
@@ -2454,12 +2607,17 @@ export function Sidebar({
                 ) : null}
 
                 <p className="text-[11px] text-muted-foreground">
-                  Launch profile: <code>{providerProfiles[selectedProviderId] ?? "default"}</code>
+                  Launch profile:{" "}
+                  <code>
+                    {providerProfiles[selectedProviderId] ?? "default"}
+                  </code>
                 </p>
               </div>
 
               {createStatusText ? (
-                <p className="text-[11px] text-muted-foreground">{createStatusText}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {createStatusText}
+                </p>
               ) : null}
 
               {visibleCreateError ? (
@@ -2514,7 +2672,8 @@ export function Sidebar({
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Agent Account</CardTitle>
               <CardDescription className="text-xs">
-                Configure official and third-party suppliers per agent, then choose which one is active.
+                Configure official and third-party suppliers per agent, then
+                choose which one is active.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 overflow-y-auto">
@@ -2535,8 +2694,9 @@ export function Sidebar({
                         onClick={() => {
                           setPendingActiveProviderId(provider.value);
                           const nextActiveSupplierId =
-                            pendingRuntimeSettings.activeSupplierIds[provider.value]
-                            ?? OFFICIAL_SUPPLIER_ID;
+                            pendingRuntimeSettings.activeSupplierIds[
+                              provider.value
+                            ] ?? OFFICIAL_SUPPLIER_ID;
                           setEditingSupplierId(nextActiveSupplierId);
                           setSelectedPresetId(firstPresetId(provider.value));
                           setConfigEditorNotice(null);
@@ -2576,7 +2736,8 @@ export function Sidebar({
                     Import from CC Switch
                   </Button>
                   <p className="text-[11px] text-muted-foreground">
-                    Reads local <code>~/.cc-switch/cc-switch.db</code> and maps to current agent suppliers.
+                    Reads local <code>~/.cc-switch/cc-switch.db</code> and maps
+                    to current agent suppliers.
                   </p>
                 </div>
                 {ccSwitchImportNotice ? (
@@ -2656,10 +2817,13 @@ export function Sidebar({
                               {supplier.name}
                             </p>
                             <p className="truncate text-[11px] text-muted-foreground">
-                              {supplier.kind === "official" ? "Official Default" : "Third-party"}
+                              {supplier.kind === "official"
+                                ? "Official Default"
+                                : "Third-party"}
                               {!isDefaultProfileName(supplier.profileName) ? (
                                 <>
-                                  {" "}· profile <code>{supplier.profileName}</code>
+                                  {" "}
+                                  · profile <code>{supplier.profileName}</code>
                                 </>
                               ) : null}
                             </p>
@@ -2675,7 +2839,12 @@ export function Sidebar({
                               variant={active ? "secondary" : "outline"}
                               size="sm"
                               className="h-7 px-2 text-[11px]"
-                              onClick={() => setPendingActiveSupplier(pendingActiveProviderId, supplier.id)}
+                              onClick={() =>
+                                setPendingActiveSupplier(
+                                  pendingActiveProviderId,
+                                  supplier.id,
+                                )
+                              }
                             >
                               {active ? "Enabled" : "Enable"}
                             </Button>
@@ -2697,7 +2866,12 @@ export function Sidebar({
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-[11px] text-destructive"
-                                onClick={() => deletePendingSupplier(pendingActiveProviderId, supplier.id)}
+                                onClick={() =>
+                                  deletePendingSupplier(
+                                    pendingActiveProviderId,
+                                    supplier.id,
+                                  )
+                                }
                               >
                                 Delete
                               </Button>
@@ -2727,7 +2901,9 @@ export function Sidebar({
                     </p>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <label className="space-y-1">
-                        <span className="text-[11px] text-muted-foreground">Name</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          Name
+                        </span>
                         <input
                           type="text"
                           value={editingSupplier.name}
@@ -2743,7 +2919,9 @@ export function Sidebar({
                         />
                       </label>
                       <label className="space-y-1">
-                        <span className="text-[11px] text-muted-foreground">Note</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          Note
+                        </span>
                         <input
                           type="text"
                           value={editingSupplier.note ?? ""}
@@ -2761,7 +2939,9 @@ export function Sidebar({
                       </label>
                     </div>
                     <label className="space-y-1">
-                      <span className="text-[11px] text-muted-foreground">Profile</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Profile
+                      </span>
                       <input
                         type="text"
                         value={editingSupplier.profileName}
@@ -2784,7 +2964,9 @@ export function Sidebar({
                     </p>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <label className="space-y-1">
-                        <span className="text-[11px] text-muted-foreground">API Base URL</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          API Base URL
+                        </span>
                         <input
                           type="text"
                           value={editingSupplier.baseUrl ?? ""}
@@ -2801,7 +2983,9 @@ export function Sidebar({
                         />
                       </label>
                       <label className="space-y-1">
-                        <span className="text-[11px] text-muted-foreground">API Key</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          API Key
+                        </span>
                         <input
                           type="password"
                           value={editingSupplier.apiKey ?? ""}
@@ -2833,7 +3017,9 @@ export function Sidebar({
                             : "text-destructive",
                         )}
                       >
-                        {editingConfigValidation.isValid ? "Valid JSON" : "Invalid JSON"}
+                        {editingConfigValidation.isValid
+                          ? "Valid JSON"
+                          : "Invalid JSON"}
                       </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -2920,13 +3106,20 @@ export function Sidebar({
               ) : null}
 
               <p className="text-[11px] text-muted-foreground">
-                Current target: {pendingActiveProviderOption?.label ?? "Claude Code"} /{" "}
+                Current target:{" "}
+                {pendingActiveProviderOption?.label ?? "Claude Code"} /{" "}
                 {pendingActiveProfileName.trim() || "default"}
               </p>
 
               <div className="rounded border border-border/60 bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
-                Launch profile preview for {providerDisplayName(pendingActiveProviderId)}:{" "}
-                <code>{resolveProviderActiveProfile(pendingRuntimeSettings, pendingActiveProviderId)}</code>
+                Launch profile preview for{" "}
+                {providerDisplayName(pendingActiveProviderId)}:{" "}
+                <code>
+                  {resolveProviderActiveProfile(
+                    pendingRuntimeSettings,
+                    pendingActiveProviderId,
+                  )}
+                </code>
               </div>
 
               {accountDialogError ? (
@@ -2989,7 +3182,9 @@ export function Sidebar({
                     <Icon className="h-3.5 w-3.5" />
                     {label}
                   </span>
-                  {pendingTheme === value ? <Check className="h-3.5 w-3.5" /> : null}
+                  {pendingTheme === value ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : null}
                 </Button>
               ))}
               <div className="flex items-center justify-end gap-2 pt-1">
@@ -3032,7 +3227,8 @@ export function Sidebar({
             <CardHeader className="pb-2">
               <CardTitle className="text-base">MCP Management Center</CardTitle>
               <CardDescription className="text-xs">
-                Manage MCP server config, validation, connection tests, and provider sync.
+                Manage MCP server config, validation, connection tests, and
+                provider sync.
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-y-auto">

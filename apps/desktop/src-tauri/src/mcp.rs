@@ -236,7 +236,9 @@ fn sync_managed_servers_from_agents(
                     server.headers_json = discovered_server.headers_json.clone();
                     changed = true;
                 }
-                if server.env_json != discovered_server.env_json {
+                let discovered_env_empty = discovered_server.env_json.trim().is_empty()
+                    || discovered_server.env_json.trim() == "{}";
+                if !discovered_env_empty && server.env_json != discovered_server.env_json {
                     server.env_json = discovered_server.env_json.clone();
                     changed = true;
                 }
@@ -1628,13 +1630,20 @@ fn normalize_json_array_string_values(
 
     let mut normalized = Vec::new();
     for value in array {
-        match value.as_str() {
-            Some(string_value) => normalized.push(string_value.to_string()),
-            None => {
-                push_field_error(field_errors, field_name, "Array items must all be strings.");
-                return "[]".to_string();
-            }
+        if let Some(string_value) = value.as_str() {
+            normalized.push(string_value.to_string());
+            continue;
         }
+        if value.is_number() || value.is_boolean() {
+            normalized.push(value.to_string());
+            continue;
+        }
+        push_field_error(
+            field_errors,
+            field_name,
+            "Array items must all be strings, numbers, or booleans.",
+        );
+        return "[]".to_string();
     }
 
     serde_json::to_string(&normalized).unwrap_or_else(|_| "[]".to_string())
@@ -1672,19 +1681,20 @@ fn normalize_json_object_string_values(
 
     let mut normalized = BTreeMap::new();
     for (key, value) in object {
-        match value.as_str() {
-            Some(string_value) => {
-                normalized.insert(key.to_string(), string_value.to_string());
-            }
-            None => {
-                push_field_error(
-                    field_errors,
-                    field_name,
-                    "Object values must all be strings.",
-                );
-                return "{}".to_string();
-            }
+        if let Some(string_value) = value.as_str() {
+            normalized.insert(key.to_string(), string_value.to_string());
+            continue;
         }
+        if value.is_number() || value.is_boolean() {
+            normalized.insert(key.to_string(), value.to_string());
+            continue;
+        }
+        push_field_error(
+            field_errors,
+            field_name,
+            "Object values must all be strings, numbers, or booleans.",
+        );
+        return "{}".to_string();
     }
 
     serde_json::to_string(&normalized).unwrap_or_else(|_| "{}".to_string())

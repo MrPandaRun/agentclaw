@@ -25,6 +25,7 @@ import type {
   ProjectGitBranchInfo,
 } from "@/types";
 import { providerAccentClass, providerDisplayName } from "@/lib/provider";
+import { normalizeProjectPath } from "@/lib/thread";
 
 export interface ThreadHeaderProps {
   sidebarCollapsed: boolean;
@@ -245,8 +246,11 @@ export function ThreadHeader({
         ? "Session running. Waiting for first input to persist thread id..."
         : null;
   const gitBranchText = formatGitBranchText(gitBranchInfo, gitBranchLoading);
-  const hasValidProjectPath =
+  const isProjectPathValid =
     headerProjectPath.trim().length > 0 && headerProjectPath !== "-";
+  const displayProjectPath = isProjectPathValid
+    ? normalizeProjectPath(headerProjectPath)
+    : headerProjectPath;
   const defaultOpenTarget = useMemo(
     () =>
       openTargets.find((target) => target.id === defaultOpenTargetId) ??
@@ -291,7 +295,7 @@ export function ThreadHeader({
             <MiddleTruncate text={headerTitle} />
           </CardTitle>
           <CardDescription className="min-w-0 text-xs">
-            <MiddleTruncate text={headerProjectPath} />
+            <MiddleTruncate text={displayProjectPath} />
           </CardDescription>
         </div>
 
@@ -313,7 +317,7 @@ export function ThreadHeader({
                     !quickOpenTarget ||
                     !quickOpenTarget.installed ||
                     !quickOpenTarget.available ||
-                    !hasValidProjectPath ||
+                    !isProjectPathValid ||
                     openingTargetId !== null
                   }
                   onClick={handleQuickOpen}
@@ -360,7 +364,7 @@ export function ThreadHeader({
                         const disabled =
                           !target.installed ||
                           !target.available ||
-                          !hasValidProjectPath ||
+                          !isProjectPathValid ||
                           openingTargetId !== null;
                         return (
                           <Button
