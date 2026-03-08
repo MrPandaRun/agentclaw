@@ -157,6 +157,7 @@ export interface McpServer {
   argsJson: string;
   headersJson: string;
   envJson: string;
+  extraJson: string;
   scopeProviders: string[];
   enabled: boolean;
   version: string;

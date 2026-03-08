@@ -73,6 +73,7 @@ struct ValidatedSaveRequest {
     args_json: String,
     headers_json: String,
     env_json: String,
+    extra_json: String,
     scope_providers: Vec<String>,
     enabled: bool,
     version: String,
@@ -89,6 +90,7 @@ struct ValidatedTestRequest {
     args_json: String,
     headers_json: String,
     env_json: String,
+    extra_json: String,
     secret_header_name: Option<String>,
     secret_token: Option<String>,
 }
@@ -117,6 +119,7 @@ struct DiscoveredProviderServer {
     args_json: String,
     headers_json: String,
     env_json: String,
+    extra_json: String,
     secret_header_name: Option<String>,
     secret_token: Option<String>,
 }
@@ -242,6 +245,12 @@ fn sync_managed_servers_from_agents(
                     server.env_json = discovered_server.env_json.clone();
                     changed = true;
                 }
+                let discovered_extra_empty = discovered_server.extra_json.trim().is_empty()
+                    || discovered_server.extra_json.trim() == "{}";
+                if !discovered_extra_empty && server.extra_json != discovered_server.extra_json {
+                    server.extra_json = discovered_server.extra_json.clone();
+                    changed = true;
+                }
 
                 let merged_secret_json =
                     merge_secret_json_from_discovery(&server.secret_json, discovered_server);
@@ -311,6 +320,7 @@ fn sync_managed_servers_from_agents(
             headers_json: discovered_server.headers_json.clone(),
             env_json: discovered_server.env_json.clone(),
             secret_json: merge_secret_json_from_discovery("{}", discovered_server),
+            extra_json: discovered_server.extra_json.clone(),
             scope: encode_scope_providers(&provider_scope),
             enabled: true,
             version: "1".to_string(),
@@ -513,6 +523,7 @@ fn parse_codex_toml_mcp_servers(raw: &str) -> Vec<DiscoveredProviderServer> {
         args: Vec<String>,
         headers: BTreeMap<String, String>,
         env: BTreeMap<String, String>,
+        extra: Map<String, Value>,
     }
 
     let mut entries = Vec::<Entry>::new();
@@ -582,7 +593,11 @@ fn parse_codex_toml_mcp_servers(raw: &str) -> Vec<DiscoveredProviderServer> {
             "headers" | "http_headers" => {
                 entry.headers = parse_toml_inline_string_map(value);
             }
-            _ => {}
+            _ => {
+                if let Some(parsed) = parse_toml_value(value) {
+                    entry.extra.insert(key.to_string(), parsed);
+                }
+            }
         }
 
         if let Some(raw_env_key) = key.strip_prefix("env.") {
@@ -650,6 +665,7 @@ fn parse_codex_toml_mcp_servers(raw: &str) -> Vec<DiscoveredProviderServer> {
             headers_json: serde_json::to_string(&entry.headers)
                 .unwrap_or_else(|_| "{}".to_string()),
             env_json: serde_json::to_string(&entry.env).unwrap_or_else(|_| "{}".to_string()),
+            extra_json: serde_json::to_string(&entry.extra).unwrap_or_else(|_| "{}".to_string()),
             secret_header_name: None,
             secret_token: None,
         });
@@ -722,6 +738,58 @@ fn parse_toml_string_array(raw: &str) -> Vec<String> {
         .collect()
 }
 
+fn parse_toml_value(raw: &str) -> Option<Value> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed.eq_ignore_ascii_case("true") {
+        return Some(Value::Bool(true));
+    }
+    if trimmed.eq_ignore_ascii_case("false") {
+        return Some(Value::Bool(false));
+    }
+    if let Some(value) = parse_toml_string_value(trimmed) {
+        if trimmed.starts_with('"')
+            || trimmed.starts_with('\'')
+            || (!trimmed.starts_with('{') && !trimmed.starts_with('[') && value != trimmed)
+        {
+            return Some(Value::String(value));
+        }
+    }
+    if let Ok(value) = trimmed.parse::<i64>() {
+        return Some(Value::Number(value.into()));
+    }
+    if let Ok(value) = trimmed.parse::<f64>() {
+        if let Some(number) = serde_json::Number::from_f64(value) {
+            return Some(Value::Number(number));
+        }
+    }
+    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+        let values = parse_toml_array_values(trimmed);
+        return Some(Value::Array(values));
+    }
+    if trimmed.starts_with('{') && trimmed.ends_with('}') {
+        let map = parse_toml_inline_value_map(trimmed);
+        return Some(Value::Object(map));
+    }
+    parse_toml_string_value(trimmed).map(Value::String)
+}
+
+fn parse_toml_array_values(raw: &str) -> Vec<Value> {
+    let trimmed = raw.trim();
+    if !(trimmed.starts_with('[') && trimmed.ends_with(']')) {
+        return Vec::new();
+    }
+
+    let inner = &trimmed[1..trimmed.len() - 1];
+    split_toml_collection_items(inner)
+        .into_iter()
+        .filter_map(|item| parse_toml_value(&item))
+        .collect()
+}
+
 fn parse_toml_inline_string_map(raw: &str) -> BTreeMap<String, String> {
     let trimmed = raw.trim();
     if !(trimmed.starts_with('{') && trimmed.ends_with('}')) {
@@ -746,6 +814,82 @@ fn parse_toml_inline_string_map(raw: &str) -> BTreeMap<String, String> {
         }
     }
     parsed
+}
+
+fn parse_toml_inline_value_map(raw: &str) -> Map<String, Value> {
+    let trimmed = raw.trim();
+    if !(trimmed.starts_with('{') && trimmed.ends_with('}')) {
+        return Map::new();
+    }
+
+    let content = &trimmed[1..trimmed.len() - 1];
+    let mut parsed = Map::new();
+    for part in split_toml_collection_items(content) {
+        let Some((raw_key, raw_value)) = part.split_once('=') else {
+            continue;
+        };
+        let key = trim_toml_key_name(raw_key);
+        if key.is_empty() {
+            continue;
+        }
+        if let Some(value) = parse_toml_value(raw_value) {
+            parsed.insert(key, value);
+        }
+    }
+    parsed
+}
+
+fn split_toml_collection_items(raw: &str) -> Vec<String> {
+    let mut items = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut bracket_depth = 0_i32;
+    let mut brace_depth = 0_i32;
+
+    for ch in raw.chars() {
+        match ch {
+            '\'' if !in_double => {
+                in_single = !in_single;
+                current.push(ch);
+            }
+            '"' if !in_single => {
+                in_double = !in_double;
+                current.push(ch);
+            }
+            '[' if !in_single && !in_double => {
+                bracket_depth += 1;
+                current.push(ch);
+            }
+            ']' if !in_single && !in_double => {
+                bracket_depth -= 1;
+                current.push(ch);
+            }
+            '{' if !in_single && !in_double => {
+                brace_depth += 1;
+                current.push(ch);
+            }
+            '}' if !in_single && !in_double => {
+                brace_depth -= 1;
+                current.push(ch);
+            }
+            ',' if !in_single && !in_double && bracket_depth == 0 && brace_depth == 0 => {
+                let trimmed = current.trim();
+                if !trimmed.is_empty() {
+                    items.push(trimmed.to_string());
+                }
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        items.push(trimmed.to_string());
+    }
+
+    items
 }
 
 fn parse_discovered_server_value(
@@ -832,6 +976,8 @@ fn parse_discovered_server_value(
         name = derive_server_name_from_target(&transport, &target);
     }
 
+    let extra = extract_server_extra_fields(object);
+
     Some(DiscoveredProviderServer {
         provider_id: provider_id.to_string(),
         name: name.unwrap_or_else(|| "Imported MCP".to_string()),
@@ -840,9 +986,40 @@ fn parse_discovered_server_value(
         args_json: serde_json::to_string(&args).unwrap_or_else(|_| "[]".to_string()),
         headers_json: serde_json::to_string(&headers).unwrap_or_else(|_| "{}".to_string()),
         env_json: serde_json::to_string(&env).unwrap_or_else(|_| "{}".to_string()),
+        extra_json: serde_json::to_string(&extra).unwrap_or_else(|_| "{}".to_string()),
         secret_header_name,
         secret_token,
     })
+}
+
+fn extract_server_extra_fields(object: &Map<String, Value>) -> Map<String, Value> {
+    const RESERVED_KEYS: &[&str] = &[
+        "name",
+        "type",
+        "mode",
+        "transport",
+        "command",
+        "cmd",
+        "url",
+        "target",
+        "endpoint",
+        "args",
+        "arguments",
+        "headers",
+        "http_headers",
+        "header",
+        "env",
+        "environment",
+    ];
+
+    let mut extra = Map::new();
+    for (key, value) in object {
+        if RESERVED_KEYS.contains(&key.as_str()) {
+            continue;
+        }
+        extra.insert(key.clone(), value.clone());
+    }
+    extra
 }
 
 fn first_non_empty_object_string(object: &Map<String, Value>, keys: &[&str]) -> Option<String> {
@@ -1141,6 +1318,7 @@ pub fn save_mcp_server_cmd(
         headers_json: validated.headers_json,
         env_json: validated.env_json,
         secret_json,
+        extra_json: validated.extra_json,
         scope: encode_scope_providers(&validated.scope_providers),
         enabled: validated.enabled,
         version: validated.version,
@@ -1436,6 +1614,11 @@ fn validate_save_request(
         "envJson",
         &mut field_errors,
     );
+    let extra_json = normalize_json_object_value(
+        request.extra_json.as_deref(),
+        "extraJson",
+        &mut field_errors,
+    );
 
     if let Some(transport_value) = transport.as_deref() {
         validate_target_for_transport(transport_value, &target, &mut field_errors);
@@ -1475,6 +1658,7 @@ fn validate_save_request(
         args_json,
         headers_json,
         env_json,
+        extra_json,
         scope_providers,
         enabled: request.enabled,
         version,
@@ -1517,6 +1701,11 @@ fn validate_test_request(
         "envJson",
         &mut field_errors,
     );
+    let extra_json = normalize_json_object_value(
+        request.extra_json.as_deref(),
+        "extraJson",
+        &mut field_errors,
+    );
 
     if let Some(transport_value) = transport.as_deref() {
         validate_target_for_transport(transport_value, &target, &mut field_errors);
@@ -1546,6 +1735,7 @@ fn validate_test_request(
         args_json,
         headers_json,
         env_json,
+        extra_json,
         secret_header_name,
         secret_token,
     })
@@ -1700,6 +1890,39 @@ fn normalize_json_object_string_values(
     serde_json::to_string(&normalized).unwrap_or_else(|_| "{}".to_string())
 }
 
+fn normalize_json_object_value(
+    raw: Option<&str>,
+    field_name: &str,
+    field_errors: &mut Vec<McpFieldErrorPayload>,
+) -> String {
+    let source = raw.unwrap_or("").trim();
+    if source.is_empty() {
+        return "{}".to_string();
+    }
+
+    let parsed: Value = match serde_json::from_str(source) {
+        Ok(value) => value,
+        Err(error) => {
+            push_field_error(
+                field_errors,
+                field_name,
+                &format!("Invalid JSON object: {error}"),
+            );
+            return "{}".to_string();
+        }
+    };
+
+    let object = match parsed.as_object() {
+        Some(object) => object,
+        None => {
+            push_field_error(field_errors, field_name, "Value must be a JSON object.");
+            return "{}".to_string();
+        }
+    };
+
+    serde_json::to_string(object).unwrap_or_else(|_| "{}".to_string())
+}
+
 fn normalize_scope_providers(raw: Option<Vec<String>>) -> Vec<String> {
     let requested = match raw {
         Some(values) => values,
@@ -1839,6 +2062,7 @@ fn server_to_payload(server: McpServer) -> McpServerPayload {
         args_json: server.args_json,
         headers_json: server.headers_json,
         env_json: server.env_json,
+        extra_json: server.extra_json,
         scope_providers: decode_scope_providers(&server.scope),
         enabled: server.enabled,
         version: server.version,
@@ -1868,6 +2092,7 @@ fn sanitize_server_for_audit(server: &McpServer) -> Value {
       "enabled": server.enabled,
       "scopeProviders": decode_scope_providers(&server.scope),
       "version": server.version,
+      "extra": serde_json::from_str::<Value>(&server.extra_json).unwrap_or_else(|_| json!({})),
       "hasSecret": secret.token.as_deref().map(str::trim).map(|value| !value.is_empty()).unwrap_or(false),
       "secretHeaderName": secret.header_name,
       "lastTestStatus": server.last_test_status,
@@ -1941,6 +2166,8 @@ fn run_http_connection_test(validated: &ValidatedTestRequest) -> (bool, Option<S
     let headers_map = decode_object_string_map(&validated.headers_json);
     let env_map = decode_object_string_map(&validated.env_json);
     let args_values = decode_string_array(&validated.args_json);
+    let extra_map = serde_json::from_str::<Map<String, Value>>(&validated.extra_json)
+        .unwrap_or_default();
 
     let mut request = client.get(&validated.target);
 
@@ -1968,7 +2195,7 @@ fn run_http_connection_test(validated: &ValidatedTestRequest) -> (bool, Option<S
 
     // The test endpoint may use query hints from args/env in upstream gateways.
     // We only surface that these values are parsed and available for diagnostics.
-    let _diagnostic = (args_values.len(), env_map.len());
+    let _diagnostic = (args_values.len(), env_map.len(), extra_map.len());
 
     match request.send() {
         Ok(response) => {
@@ -2194,7 +2421,14 @@ fn build_unified_server_spec(server: &McpServer) -> Result<Value, String> {
         ));
     }
 
-    let mut spec = Map::<String, Value>::new();
+    let extra = serde_json::from_str::<Map<String, Value>>(&server.extra_json).map_err(|error| {
+        format!(
+            "Failed to parse extra JSON for MCP '{}': {error}",
+            server.name
+        )
+    })?;
+
+    let mut spec = extra;
     spec.insert("type".to_string(), Value::String(transport.clone()));
 
     if transport == "stdio" {
@@ -2344,6 +2578,16 @@ fn convert_unified_spec_to_opencode(spec: &Value) -> Result<Value, String> {
         }
     }
 
+    for (key, value) in object {
+        if matches!(
+            key.as_str(),
+            "type" | "command" | "args" | "env" | "url" | "headers"
+        ) {
+            continue;
+        }
+        converted.insert(key.clone(), value.clone());
+    }
+
     Ok(Value::Object(converted))
 }
 
@@ -2411,6 +2655,69 @@ fn strip_existing_codex_mcp_sections(existing_config: &str) -> String {
 
 fn parse_value_string_map(value: Option<&Value>) -> BTreeMap<String, String> {
     parse_string_map_value(value)
+}
+
+fn format_toml_key_segment(key: &str) -> String {
+    if !key.is_empty()
+        && key
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        key.to_string()
+    } else {
+        format!("\"{}\"", escape_toml_string(key))
+    }
+}
+
+fn encode_toml_value(value: &Value) -> Result<String, String> {
+    match value {
+        Value::Null => Err("null is not supported in TOML values.".to_string()),
+        Value::Bool(value) => Ok(value.to_string()),
+        Value::Number(value) => Ok(value.to_string()),
+        Value::String(value) => Ok(format!("\"{}\"", escape_toml_string(value))),
+        Value::Array(values) => {
+            let rendered = values
+                .iter()
+                .map(encode_toml_value)
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ");
+            Ok(format!("[{rendered}]"))
+        }
+        Value::Object(object) => {
+            let rendered = object
+                .iter()
+                .map(|(key, value)| {
+                    Ok(format!(
+                        "{} = {}",
+                        format_toml_key_segment(key),
+                        encode_toml_value(value)?
+                    ))
+                })
+                .collect::<Result<Vec<_>, String>>()?
+                .join(", ");
+            Ok(format!("{{ {rendered} }}"))
+        }
+    }
+}
+
+fn render_toml_extra_assignments(
+    prefix: &str,
+    value: &Value,
+    lines: &mut Vec<String>,
+) -> Result<(), String> {
+    match value {
+        Value::Object(object) => {
+            for (key, nested) in object {
+                let next_prefix = format!("{prefix}.{}", format_toml_key_segment(key));
+                render_toml_extra_assignments(&next_prefix, nested, lines)?;
+            }
+            Ok(())
+        }
+        _ => {
+            lines.push(format!("{prefix} = {}", encode_toml_value(value)?));
+            Ok(())
+        }
+    }
 }
 
 fn render_codex_mcp_sections(specs: &BTreeMap<String, Value>) -> Result<String, String> {
@@ -2484,6 +2791,17 @@ fn render_codex_mcp_sections(specs: &BTreeMap<String, Value>) -> Result<String, 
                     "Unsupported transport '{transport}' for Codex MCP '{server_key}'."
                 ));
             }
+        }
+
+        for (key, value) in object {
+            if matches!(
+                key.as_str(),
+                "type" | "command" | "args" | "env" | "url" | "headers"
+            ) {
+                continue;
+            }
+            let prefix = format_toml_key_segment(key);
+            render_toml_extra_assignments(&prefix, value, &mut lines)?;
         }
 
         sections.push(lines.join("\n"));
@@ -2700,6 +3018,7 @@ mod tests {
             headers_json: "{}".to_string(),
             env_json: "{}".to_string(),
             secret_json: "{}".to_string(),
+            extra_json: "{}".to_string(),
             scope: r#"["claude_code","codex","opencode"]"#.to_string(),
             enabled: true,
             version: "1".to_string(),
@@ -2722,6 +3041,7 @@ mod tests {
             args_json: Some("[]".to_string()),
             headers_json: Some("{}".to_string()),
             env_json: Some("{}".to_string()),
+            extra_json: Some("{}".to_string()),
             scope_providers: Some(vec!["codex".to_string()]),
             enabled: true,
             version: Some("1".to_string()),
@@ -2967,6 +3287,7 @@ mod tests {
             headers_json: "{}".to_string(),
             env_json: "{}".to_string(),
             secret_json: "{}".to_string(),
+            extra_json: "{}".to_string(),
             scope: r#"["codex"]"#.to_string(),
             enabled: true,
             version: "1".to_string(),
@@ -3021,6 +3342,7 @@ model = "gpt-5"
             headers_json: "{}".to_string(),
             env_json: "{}".to_string(),
             secret_json: "{}".to_string(),
+            extra_json: "{}".to_string(),
             scope: r#"["codex","claude_code"]"#.to_string(),
             enabled: true,
             version: "1".to_string(),
@@ -3052,6 +3374,7 @@ model = "gpt-5"
 [mcp_servers.filesystem]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-filesystem", "."]
+startup_timeout_sec = 30
 
 [mcp_servers."remote-api"]
 transport = "sse"
@@ -3066,6 +3389,7 @@ url = "https://example.com/sse"
             .expect("filesystem server should exist");
         assert_eq!(filesystem.transport, "stdio");
         assert_eq!(filesystem.target, "npx");
+        assert_eq!(filesystem.extra_json, r#"{"startup_timeout_sec":30}"#);
 
         let remote = parsed
             .iter()
@@ -3073,5 +3397,25 @@ url = "https://example.com/sse"
             .expect("remote server should exist");
         assert_eq!(remote.transport, "sse");
         assert_eq!(remote.target, "https://example.com/sse");
+    }
+
+    #[test]
+    fn sync_writes_codex_extra_server_fields() {
+        let temp_home = tempfile::tempdir().expect("temp home should be created");
+        let home_path = temp_home.path();
+        let codex_path = resolve_provider_sync_path(home_path, "codex");
+        if let Some(parent) = codex_path.parent() {
+            fs::create_dir_all(parent).expect("codex parent should exist");
+        }
+
+        let mut server = sample_server("codex-extra");
+        server.scope = r#"["codex"]"#.to_string();
+        server.extra_json = r#"{"startup_timeout_sec":30}"#.to_string();
+
+        let execution = execute_sync(home_path, &[server], &["codex".to_string()], None);
+        assert!(execution.success);
+
+        let saved = fs::read_to_string(codex_path).expect("codex config should be written");
+        assert!(saved.contains("startup_timeout_sec = 30"));
     }
 }

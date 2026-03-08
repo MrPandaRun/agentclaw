@@ -402,6 +402,7 @@ pub struct McpServerPayload {
     pub args_json: String,
     pub headers_json: String,
     pub env_json: String,
+    pub extra_json: String,
     pub scope_providers: Vec<String>,
     pub enabled: bool,
     pub version: String,
@@ -432,6 +433,7 @@ pub struct SaveMcpServerRequest {
     pub args_json: Option<String>,
     pub headers_json: Option<String>,
     pub env_json: Option<String>,
+    pub extra_json: Option<String>,
     pub scope_providers: Option<Vec<String>>,
     pub enabled: bool,
     pub version: Option<String>,
@@ -470,6 +472,7 @@ pub struct TestMcpConnectionRequest {
     pub args_json: Option<String>,
     pub headers_json: Option<String>,
     pub env_json: Option<String>,
+    pub extra_json: Option<String>,
     pub secret_header_name: Option<String>,
     pub secret_token: Option<String>,
 }

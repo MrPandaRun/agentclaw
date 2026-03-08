@@ -25,6 +25,7 @@ pub struct McpServer {
     pub headers_json: String,
     pub env_json: String,
     pub secret_json: String,
+    pub extra_json: String,
     pub scope: String,
     pub enabled: bool,
     pub version: String,
@@ -52,6 +53,7 @@ pub fn list_mcp_servers(connection: &Connection) -> Result<Vec<McpServer>, McpEr
                 COALESCE(headers_json, '{}'),
                 COALESCE(env_json, '{}'),
                 COALESCE(secret_json, '{}'),
+                COALESCE(extra_json, '{}'),
                 scope, enabled, version,
                 COALESCE(created_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 COALESCE(updated_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -75,15 +77,16 @@ pub fn list_mcp_servers(connection: &Connection) -> Result<Vec<McpServer>, McpEr
                 headers_json: row.get(6)?,
                 env_json: row.get(7)?,
                 secret_json: row.get(8)?,
-                scope: row.get(9)?,
-                enabled: row.get::<_, i64>(10)? != 0,
-                version: row.get(11)?,
-                created_at: row.get(12)?,
-                updated_at: row.get(13)?,
-                last_tested_at: row.get(14)?,
-                last_test_status: row.get(15)?,
-                last_test_message: row.get(16)?,
-                last_test_duration_ms: row.get(17)?,
+                extra_json: row.get(9)?,
+                scope: row.get(10)?,
+                enabled: row.get::<_, i64>(11)? != 0,
+                version: row.get(12)?,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
+                last_tested_at: row.get(15)?,
+                last_test_status: row.get(16)?,
+                last_test_message: row.get(17)?,
+                last_test_duration_ms: row.get(18)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -97,6 +100,7 @@ pub fn get_mcp_server(connection: &Connection, id: &str) -> Result<McpServer, Mc
                 COALESCE(headers_json, '{}'),
                 COALESCE(env_json, '{}'),
                 COALESCE(secret_json, '{}'),
+                COALESCE(extra_json, '{}'),
                 scope, enabled, version,
                 COALESCE(created_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 COALESCE(updated_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -120,15 +124,16 @@ pub fn get_mcp_server(connection: &Connection, id: &str) -> Result<McpServer, Mc
                 headers_json: row.get(6)?,
                 env_json: row.get(7)?,
                 secret_json: row.get(8)?,
-                scope: row.get(9)?,
-                enabled: row.get::<_, i64>(10)? != 0,
-                version: row.get(11)?,
-                created_at: row.get(12)?,
-                updated_at: row.get(13)?,
-                last_tested_at: row.get(14)?,
-                last_test_status: row.get(15)?,
-                last_test_message: row.get(16)?,
-                last_test_duration_ms: row.get(17)?,
+                extra_json: row.get(9)?,
+                scope: row.get(10)?,
+                enabled: row.get::<_, i64>(11)? != 0,
+                version: row.get(12)?,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
+                last_tested_at: row.get(15)?,
+                last_test_status: row.get(16)?,
+                last_test_message: row.get(17)?,
+                last_test_duration_ms: row.get(18)?,
             })
         })
         .map_err(|_| McpError::NotFound(id.to_string()))?;
@@ -141,14 +146,14 @@ pub fn upsert_mcp_server(connection: &Connection, server: &McpServer) -> Result<
     connection.execute(
         "INSERT INTO mcps (
             id, name, command, args_json, scope, enabled, version,
-            transport, target, headers_json, env_json, secret_json,
+            transport, target, headers_json, env_json, secret_json, extra_json,
             created_at, updated_at,
             last_tested_at, last_test_status, last_test_message, last_test_duration_ms
          ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7,
-            ?8, ?9, ?10, ?11, ?12,
-            ?13, ?14,
-            ?15, ?16, ?17, ?18
+            ?8, ?9, ?10, ?11, ?12, ?13,
+            ?14, ?15,
+            ?16, ?17, ?18, ?19
          )
          ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
@@ -162,6 +167,7 @@ pub fn upsert_mcp_server(connection: &Connection, server: &McpServer) -> Result<
             headers_json = excluded.headers_json,
             env_json = excluded.env_json,
             secret_json = excluded.secret_json,
+            extra_json = excluded.extra_json,
             updated_at = excluded.updated_at,
             last_tested_at = excluded.last_tested_at,
             last_test_status = excluded.last_test_status,
@@ -180,6 +186,7 @@ pub fn upsert_mcp_server(connection: &Connection, server: &McpServer) -> Result<
             server.headers_json,
             server.env_json,
             server.secret_json,
+            server.extra_json,
             server.created_at,
             server.updated_at,
             server.last_tested_at,
@@ -304,6 +311,7 @@ fn validate_mcp_server(server: &McpServer) -> Result<(), McpError> {
             server.transport
         )));
     }
+    serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&server.extra_json)?;
     Ok(())
 }
 
@@ -329,6 +337,7 @@ mod tests {
             headers_json: "{}".to_string(),
             env_json: "{}".to_string(),
             secret_json: "{}".to_string(),
+            extra_json: "{}".to_string(),
             scope: r#"["claude_code","codex","opencode"]"#.to_string(),
             enabled: true,
             version: "1".to_string(),

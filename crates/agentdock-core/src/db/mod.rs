@@ -13,6 +13,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0003_mcp_management",
         include_str!("../../migrations/0003_mcp_management.sql"),
     ),
+    (
+        "0004_mcp_extra_json",
+        include_str!("../../migrations/0004_mcp_extra_json.sql"),
+    ),
 ];
 
 #[derive(Debug, Error)]
@@ -119,7 +123,7 @@ mod tests {
                 row.get(0)
             })
             .expect("count query should succeed");
-        assert_eq!(applied, 3);
+        assert_eq!(applied, 4);
     }
 
     #[test]

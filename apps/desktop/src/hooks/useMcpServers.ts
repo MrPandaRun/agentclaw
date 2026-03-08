@@ -19,6 +19,7 @@ export interface McpDraftInput {
   argsJson: string;
   headersJson: string;
   envJson: string;
+  extraJson: string;
   scopeProviders: ThreadProviderId[];
   enabled: boolean;
   version: string;
@@ -152,6 +153,7 @@ export function useMcpServers(): UseMcpServersResult {
             argsJson: draft.argsJson,
             headersJson: draft.headersJson,
             envJson: draft.envJson,
+            extraJson: draft.extraJson,
             scopeProviders: draft.scopeProviders,
             enabled: draft.enabled,
             version: draft.version,
@@ -255,6 +257,7 @@ export function useMcpServers(): UseMcpServersResult {
               argsJson: draft.argsJson,
               headersJson: draft.headersJson,
               envJson: draft.envJson,
+              extraJson: draft.extraJson,
               secretHeaderName: draft.secretHeaderName,
               secretToken: draft.secretToken,
             },
