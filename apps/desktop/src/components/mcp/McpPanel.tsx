@@ -31,7 +31,7 @@ import { JsonCodeEditor } from "@/components/ui/json-code-editor";
 import { providerDisplayName } from "@/lib/provider";
 import { cn } from "@/lib/utils";
 
-const PROVIDERS: ThreadProviderId[] = ["claude_code", "codex", "opencode"];
+const PROVIDERS: ThreadProviderId[] = ["claude_code", "codex", "opencode", "sophon"];
 const CONFIG_ERROR_FIELDS = new Set([
   "transport",
   "target",
@@ -80,7 +80,12 @@ interface McpConfigDocument {
 }
 
 function isThreadProviderId(value: string): value is ThreadProviderId {
-  return value === "claude_code" || value === "codex" || value === "opencode";
+  return (
+    value === "claude_code" ||
+    value === "codex" ||
+    value === "opencode" ||
+    value === "sophon"
+  );
 }
 
 function isTransport(value: string): value is McpTransport {

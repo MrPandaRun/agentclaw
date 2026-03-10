@@ -4,6 +4,7 @@ use provider_contract::{
     ProviderAdapter, ProviderHealthCheckRequest, ProviderHealthCheckResult, ProviderHealthStatus,
 };
 use provider_opencode::OpenCodeAdapter;
+use provider_sophon::SophonAdapter;
 
 use crate::payloads::ProviderInstallStatusPayload;
 
@@ -37,12 +38,23 @@ pub fn list_provider_install_statuses(
         })?;
     let opencode = OpenCodeAdapter::new()
         .health_check(ProviderHealthCheckRequest {
+            profile_name: profile_name.clone(),
+            project_path: project_path_owned.clone(),
+        })
+        .map_err(|error| {
+            format!(
+                "Failed to check OpenCode health ({:?}): {}",
+                error.code, error.message
+            )
+        })?;
+    let sophon = SophonAdapter::new()
+        .health_check(ProviderHealthCheckRequest {
             profile_name,
             project_path: project_path_owned,
         })
         .map_err(|error| {
             format!(
-                "Failed to check OpenCode health ({:?}): {}",
+                "Failed to check Sophon health ({:?}): {}",
                 error.code, error.message
             )
         })?;
@@ -51,6 +63,7 @@ pub fn list_provider_install_statuses(
         map_provider_install_status(codex),
         map_provider_install_status(claude),
         map_provider_install_status(opencode),
+        map_provider_install_status(sophon),
     ])
 }
 

@@ -1,4 +1,5 @@
 use provider_contract::ProviderId;
+use provider_sophon::SophonAdapter;
 use tauri::Emitter;
 
 use crate::payloads::{
@@ -6,6 +7,7 @@ use crate::payloads::{
     CloseEmbeddedTerminalRequest, CodexThreadRuntimeStatePayload, DeleteMcpServerRequest,
     DiscoverSkillInstallProgressPayload, GetClaudeThreadRuntimeStateRequest,
     GetCodexThreadRuntimeStateRequest, GetOpenCodeThreadRuntimeStateRequest,
+    GetSophonThreadRuntimeStateRequest,
     GetProjectGitBranchRequest, InstallDiscoveredSkillRequest, InstallSkillFromGitRequest,
     InstallSkillFromPathRequest, McpConnectionTestResultPayload, McpOperationLogPayload,
     McpServerPayload, OpenCodeThreadRuntimeStatePayload, OpenNewThreadInTerminalRequest,
@@ -13,9 +15,13 @@ use crate::payloads::{
     OpenThreadInHappyRequest, OpenThreadInTerminalRequest, OpenThreadInTerminalResponse,
     ProjectGitBranchPayload, ProviderInstallStatusPayload, RemoveSkillRepoRequest,
     ResizeEmbeddedTerminalRequest, SaveMcpServerRequest, SaveMcpServerResponsePayload,
-    SkillPayload, SkillRepoPayload, StartEmbeddedTerminalRequest, StartEmbeddedTerminalResponse,
-    StartNewEmbeddedTerminalRequest, SyncMcpConfigsRequest, SyncMcpConfigsResponsePayload,
-    TestMcpConnectionRequest, ThreadSummaryPayload, ToggleMcpServerEnabledRequest,
+    InstallSophonCliPayload, SkillPayload, SkillRepoPayload, SophonConductorSessionPayload,
+    SophonThreadRuntimeStatePayload, StartEmbeddedTerminalRequest,
+    StartEmbeddedTerminalResponse, StartNewEmbeddedTerminalRequest,
+    StartSophonConductorSessionRequest, SyncMcpConfigsRequest,
+    SyncMcpConfigsResponsePayload, TestMcpConnectionRequest, ThreadSummaryPayload,
+    SyncSophonAccountSettingsPayload, SyncSophonAccountSettingsRequest,
+    ToggleMcpServerEnabledRequest,
     ToggleSkillEnabledForProviderRequest, ToggleSkillEnabledRequest, UninstallSkillRequest,
     WriteEmbeddedTerminalInputRequest,
 };
@@ -25,6 +31,8 @@ use crate::{
     ccswitch, mcp, open_targets, payloads::ImportProviderSkillsRequest,
     payloads::ProviderSkillPayload, provider_health, skills, terminal, threads,
 };
+use crate::sophon_install;
+use crate::sophon_account;
 
 #[tauri::command]
 pub async fn list_threads(
@@ -44,6 +52,99 @@ pub async fn list_provider_install_statuses(
     })
     .await
     .map_err(|error| format!("Failed to load provider install statuses: {error}"))?
+}
+
+#[tauri::command]
+pub fn get_sophon_workspace_path() -> Result<String, String> {
+    let home_dir = dirs::home_dir().ok_or_else(|| "Failed to resolve home directory".to_string())?;
+    Ok(home_dir
+        .join(".sophon")
+        .join("workspace")
+        .to_string_lossy()
+        .into_owned())
+}
+
+#[tauri::command]
+pub async fn install_sophon_cli(app: tauri::AppHandle) -> Result<InstallSophonCliPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        sophon_install::install_sophon_cli_cmd(&app).map(|response| InstallSophonCliPayload {
+            installed: response.installed,
+            binary_path: response.binary_path,
+            message: response.message,
+        })
+    })
+    .await
+    .map_err(|error| format!("Failed to install Sophon CLI: {error}"))?
+}
+
+#[tauri::command]
+pub async fn sync_sophon_account_settings(
+    request: SyncSophonAccountSettingsRequest,
+) -> Result<SyncSophonAccountSettingsPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        sophon_account::sync_sophon_account_settings(request)
+    })
+    .await
+    .map_err(|error| format!("Failed to sync Sophon account settings: {error}"))?
+}
+
+#[tauri::command]
+pub async fn list_sophon_conductor_sessions() -> Result<Vec<SophonConductorSessionPayload>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        SophonAdapter::new()
+            .list_conductor_sessions()
+            .map(|sessions| {
+                sessions
+                    .into_iter()
+                    .map(|session| SophonConductorSessionPayload {
+                        id: session.id,
+                        title: session.title,
+                        workspace_path: session.workspace_path,
+                        status: session.status,
+                        created_at: session.created_at,
+                        last_active_at: session.last_active_at,
+                        worker_agents: session.worker_agents,
+                        linked_thread_keys: session.linked_thread_keys,
+                    })
+                    .collect()
+            })
+            .map_err(|error| {
+                format!(
+                    "Failed to list Sophon conductor sessions ({:?}): {}",
+                    error.code, error.message
+                )
+            })
+    })
+    .await
+    .map_err(|error| format!("Failed to list Sophon conductor sessions: {error}"))?
+}
+
+#[tauri::command]
+pub async fn start_sophon_conductor_session(
+    request: StartSophonConductorSessionRequest,
+) -> Result<SophonConductorSessionPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        SophonAdapter::new()
+            .start_conductor_session(&request.workspace_path)
+            .map(|session| SophonConductorSessionPayload {
+                id: session.id,
+                title: session.title,
+                workspace_path: session.workspace_path,
+                status: session.status,
+                created_at: session.created_at,
+                last_active_at: session.last_active_at,
+                worker_agents: session.worker_agents,
+                linked_thread_keys: session.linked_thread_keys,
+            })
+            .map_err(|error| {
+                format!(
+                    "Failed to start Sophon conductor session ({:?}): {}",
+                    error.code, error.message
+                )
+            })
+    })
+    .await
+    .map_err(|error| format!("Failed to start Sophon conductor session: {error}"))?
 }
 
 #[tauri::command]
@@ -84,6 +185,17 @@ pub async fn get_opencode_thread_runtime_state(
     })
     .await
     .map_err(|error| format!("Failed to load OpenCode runtime state: {error}"))?
+}
+
+#[tauri::command]
+pub async fn get_sophon_thread_runtime_state(
+    request: GetSophonThreadRuntimeStateRequest,
+) -> Result<SophonThreadRuntimeStatePayload, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        threads::get_sophon_thread_runtime_state(&request.thread_id)
+    })
+    .await
+    .map_err(|error| format!("Failed to load Sophon runtime state: {error}"))?
 }
 
 #[tauri::command]
@@ -294,7 +406,7 @@ fn parse_provider_for_happy_launch(raw: &str) -> Result<ProviderId, String> {
         .map_err(|_| format!("Unsupported provider for Happy integration: {raw}"))?;
     match provider_id {
         ProviderId::ClaudeCode | ProviderId::Codex => Ok(provider_id),
-        ProviderId::OpenCode => {
+        ProviderId::OpenCode | ProviderId::Sophon => {
             Err("Happy integration currently supports claude_code and codex only".to_string())
         }
     }

@@ -25,6 +25,49 @@ pub struct ProviderInstallStatusPayload {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct InstallSophonCliPayload {
+    pub installed: bool,
+    pub binary_path: String,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSophonAccountSettingsRequest {
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub config_json: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSophonAccountSettingsPayload {
+    pub settings_path: String,
+    pub auth_path: String,
+    pub models_path: String,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub thinking_level: Option<String>,
+    pub settings_updated: bool,
+    pub auth_updated: bool,
+    pub models_updated: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SophonConductorSessionPayload {
+    pub id: String,
+    pub title: String,
+    pub workspace_path: String,
+    pub status: String,
+    pub created_at: String,
+    pub last_active_at: String,
+    pub worker_agents: Vec<String>,
+    pub linked_thread_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CcSwitchImportedSupplierPayload {
     pub provider_id: String,
     pub source_id: String,
@@ -88,6 +131,20 @@ pub struct OpenCodeThreadRuntimeStatePayload {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GetSophonThreadRuntimeStateRequest {
+    pub thread_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SophonThreadRuntimeStatePayload {
+    pub agent_answering: bool,
+    pub last_event_kind: Option<String>,
+    pub last_event_at_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OpenThreadInTerminalRequest {
     pub thread_id: String,
     pub provider_id: String,
@@ -120,6 +177,12 @@ pub struct OpenTargetStatusPayload {
 pub struct OpenProjectWithTargetRequest {
     pub project_path: String,
     pub target_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartSophonConductorSessionRequest {
+    pub workspace_path: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

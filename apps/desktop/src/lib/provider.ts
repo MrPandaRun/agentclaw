@@ -8,12 +8,19 @@ export function isOpenCodeProvider(providerId?: string): boolean {
   return providerId === "opencode";
 }
 
+export function isSophonProvider(providerId?: string): boolean {
+  return providerId === "sophon";
+}
+
 export function providerDisplayName(providerId?: string): string {
   if (providerId === "codex") {
     return "Codex";
   }
   if (providerId === "opencode") {
     return "OpenCode";
+  }
+  if (providerId === "sophon") {
+    return "Sophon";
   }
   if (providerId === "claude_code") {
     return "Claude Code";
@@ -28,12 +35,18 @@ export function providerAccentClass(providerId?: string): string {
   if (isOpenCodeProvider(providerId)) {
     return "text-[#211E1E] dark:text-[#F1ECEC]";
   }
+  if (isSophonProvider(providerId)) {
+    return "text-[#17594A] dark:text-[#86E7CF]";
+  }
   return "text-[#FF7043] dark:text-[#FF8A65]";
 }
 
 export function isSupportedProvider(value: string): value is ThreadProviderId {
   return (
-    value === "claude_code" || value === "codex" || value === "opencode"
+    value === "claude_code" ||
+    value === "codex" ||
+    value === "opencode" ||
+    value === "sophon"
   );
 }
 
@@ -43,6 +56,9 @@ export function providerInstallGuideUrl(providerId: ThreadProviderId): string {
   }
   if (providerId === "codex") {
     return "https://platform.openai.com/docs/codex";
+  }
+  if (providerId === "sophon") {
+    return "https://github.com/MrPandaRun/agentclaw";
   }
   return "https://opencode.ai/docs";
 }

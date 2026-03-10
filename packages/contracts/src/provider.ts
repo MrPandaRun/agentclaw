@@ -1,4 +1,4 @@
-export type ProviderId = "codex" | "claude_code" | "opencode";
+export type ProviderId = "codex" | "claude_code" | "opencode" | "sophon";
 
 export type ProviderErrorCode =
   | "credential_missing"
@@ -60,4 +60,9 @@ export interface ProviderAdapter {
   resumeThread(request: ResumeThreadRequest): Promise<ResumeThreadResult>;
 }
 
-export const SUPPORTED_PROVIDERS: ProviderId[] = ["codex", "claude_code", "opencode"];
+export const SUPPORTED_PROVIDERS: ProviderId[] = [
+  "codex",
+  "claude_code",
+  "opencode",
+  "sophon",
+];

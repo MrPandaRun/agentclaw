@@ -1,7 +1,7 @@
 # Product Requirements Document: AgentDock Phase 1 (Execution Baseline)
 
-**Version**: 1.1  
-**Date**: 2026-02-24  
+**Version**: 1.2  
+**Date**: 2026-03-10  
 **Owner**: Product / Engineering
 
 ---
@@ -11,10 +11,11 @@
 This document is the current execution baseline for Phase 1 delivery.
 
 Phase 1 in code currently targets:
-- Agent scope (Provider IDs): `codex`, `claude_code`, `opencode`
+- Agent scope (Provider IDs): `codex`, `claude_code`, `opencode`, `sophon`
 - Desktop-first local runtime (Tauri host + React UI)
 - Terminal-only thread continuation flow
 - Unified thread retrieval and resume command generation via provider adapters
+- Global manual/automatic workspace mode with Sophon workspace support
 
 AgentDock does not replace agent-native CLIs. Agent-native thread stores remain the source of truth.
 
@@ -22,8 +23,9 @@ AgentDock does not replace agent-native CLIs. Agent-native thread stores remain 
 
 - Project: folder-level grouping in the left sidebar.
 - Thread: one interaction unit shown in UI.
-- Agent: primary execution carrier (`codex` / `claude_code` / `opencode`).
+- Agent: primary execution carrier (`codex` / `claude_code` / `opencode` / `sophon`).
 - Model Provider: model vendor used by an agent run (for example OpenAI, Anthropic, OpenRouter).
+- Conductor: internal Sophon role used to coordinate work inside `~/.sophon/workspace`.
 
 ---
 
@@ -31,10 +33,11 @@ AgentDock does not replace agent-native CLIs. Agent-native thread stores remain 
 
 ### 2.1 In Scope (Current)
 
-- Agent health checks and thread retrieval for all three agents.
-- Unified thread listing in desktop app, grouped by project folder.
+- Agent health checks and thread retrieval for all four agents.
+- Unified thread listing in desktop app, with manual folder-grouped mode and automatic Sophon workspace mode.
 - Resume command path through shared provider adapter contracts.
 - Runtime-state querying per agent for terminal lifecycle handling.
+- Managed Sophon installation for desktop development.
 - Local SQLite initialization and append-only migration policy.
 
 ### 2.2 Out of Scope (Current)
@@ -42,7 +45,7 @@ AgentDock does not replace agent-native CLIs. Agent-native thread stores remain 
 - Full mobile remote-control loop.
 - Team collaboration and cloud sync.
 - Billing and policy engine.
-- Productized cross-agent context-summary orchestration API.
+- Productized autonomous cross-agent orchestration API.
 
 ---
 
@@ -50,7 +53,9 @@ AgentDock does not replace agent-native CLIs. Agent-native thread stores remain 
 
 ### 3.1 Desktop Interaction Model
 
-- Sidebar: folder-grouped thread list.
+- Sidebar:
+  - Manual mode: folder-grouped thread list.
+  - Automatic mode: Sophon workspace thread list.
 - Main panel: embedded terminal session.
 - No in-app message composer/list send flow.
 
@@ -65,6 +70,7 @@ AgentDock does not replace agent-native CLIs. Agent-native thread stores remain 
 - Codex: official title map from `~/.codex/.codex-global-state.json`, then fallback.
 - Claude: official display title signal in `~/.claude/history.jsonl`, then fallback.
 - OpenCode: session `title`, then fallback.
+- Sophon: local session title derived from stored thread metadata, then fallback.
 
 ---
 
@@ -76,6 +82,7 @@ Must remain:
 - `codex`
 - `claude_code`
 - `opencode`
+- `sophon`
 
 ### 4.2 Shared Contract Methods (Current)
 
@@ -104,12 +111,12 @@ Current contract files:
 - Adapter errors must map to shared error codes.
 
 Acceptance:
-- Thread listing succeeds for all three agents when local data exists.
+- Thread listing succeeds for all four agents when local data exists.
 - Resume command payload is generated for selected thread.
 
 ## FR-02 Thread Aggregation in Desktop Host
 
-- Tauri host must aggregate thread overviews from Claude, Codex, and OpenCode adapters.
+- Tauri host must aggregate thread overviews from Claude, Codex, OpenCode, and Sophon adapters.
 - Aggregated list must be sorted by latest activity.
 
 Acceptance:
@@ -122,7 +129,8 @@ Acceptance:
 
 Acceptance:
 - `get_claude_thread_runtime_state`, `get_codex_thread_runtime_state`, `get_opencode_thread_runtime_state` are available and callable.
-- `list_provider_install_statuses` returns `installed` and `health_status` for all three agents.
+- `get_sophon_thread_runtime_state` is available and callable.
+- `list_provider_install_statuses` returns `installed` and `health_status` for all four agents.
 
 ## FR-04 Terminal Session Lifecycle
 
@@ -187,9 +195,10 @@ From `apps/desktop/src-tauri/src/commands.rs`:
 - `bun run test`
 - Contract parity check between TS and Rust provider files
 - Manual desktop validation:
-  - list threads from three providers
+  - list threads from four providers
   - select/resume thread in embedded terminal
   - create new thread launch from sidebar folder menu
+  - validate manual mode and automatic Sophon workspace mode
   - verify Create Thread dialog install status and install guidance behavior
 
 ---

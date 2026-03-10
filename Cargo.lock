@@ -43,6 +43,7 @@ dependencies = [
  "provider-codex",
  "provider-contract",
  "provider-opencode",
+ "provider-sophon",
  "reqwest 0.11.27",
  "rusqlite",
  "serde",
@@ -3217,6 +3218,15 @@ name = "provider-opencode"
 version = "0.1.0"
 dependencies = [
  "provider-contract",
+ "serde_json",
+]
+
+[[package]]
+name = "provider-sophon"
+version = "0.1.0"
+dependencies = [
+ "provider-contract",
+ "serde",
  "serde_json",
 ]
 

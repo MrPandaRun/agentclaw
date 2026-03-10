@@ -10,6 +10,7 @@ pub enum ProviderId {
     ClaudeCode,
     #[serde(rename = "opencode")]
     OpenCode,
+    Sophon,
 }
 
 impl ProviderId {
@@ -18,6 +19,7 @@ impl ProviderId {
             ProviderId::Codex => "codex",
             ProviderId::ClaudeCode => "claude_code",
             ProviderId::OpenCode => "opencode",
+            ProviderId::Sophon => "sophon",
         }
     }
 }

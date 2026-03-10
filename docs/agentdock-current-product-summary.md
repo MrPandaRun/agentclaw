@@ -1,6 +1,6 @@
 # AgentDock Current Product Summary (Implementation-Aligned)
 
-> Updated: 2026-02-24  
+> Updated: 2026-03-10  
 > Based on code in: `apps/desktop`, `apps/desktop/src-tauri`, `crates/*`, `packages/contracts`
 
 ## 1. Product Positioning
@@ -11,6 +11,7 @@ Supported agents:
 - `codex`
 - `claude_code`
 - `opencode`
+- `sophon`
 
 Core boundary:
 - AgentDock does not replace agent-native thread engines.
@@ -20,15 +21,17 @@ Core boundary:
 
 - Project: folder-level grouping in the left sidebar.
 - Thread: one interaction unit shown in UI.
-- Agent: primary execution carrier (`codex` / `claude_code` / `opencode`).
+- Agent: primary execution carrier (`codex` / `claude_code` / `opencode` / `sophon`).
 - Model Provider: model vendor used by an agent run (for example OpenAI, Anthropic, OpenRouter).
+- Conductor: internal Sophon role for orchestrating work inside `~/.sophon/workspace`.
 
 ## 2. Current User Value
 
-- Unified historical thread visibility from three agents.
-- Folder-grouped navigation and quick thread switching in desktop UI.
+- Unified historical thread visibility from four agents.
+- Folder-grouped navigation in manual mode and Sophon workspace navigation in automatic mode.
 - Embedded terminal continuation for selected threads.
 - New thread launch entry via global/folder create flow with Agent selection.
+- First-party Sophon workspace sessions for local coordination metadata.
 
 ## 3. Capability Inventory
 
@@ -41,6 +44,7 @@ Aligned provider IDs:
 - `codex`
 - `claude_code`
 - `opencode`
+- `sophon`
 
 Current shared adapter method surface:
 - `health_check`
@@ -61,12 +65,20 @@ Current shared adapter method surface:
   - Reads from `~/.local/share/opencode/storage`
   - Prefers session `title`
   - Resume command path: `opencode --session <thread_id>`
+- `provider-sophon`
+  - Reads through the `sophon` CLI JSON interface instead of parsing private files directly
+  - Health command path: `sophon health --json`
+  - Thread list command path: `sophon threads list --json`
+  - Resume command path: `sophon threads resume <thread_id>`
+  - Workspace conductor session path: `sophon conductor sessions list --json`
 
-All three adapters expose runtime-state reading used by desktop terminal lifecycle decisions.
+All four adapters expose runtime-state reading used by desktop terminal lifecycle decisions.
 
 ### 3.3 Desktop UI and Title/Preview Rules
 
-- Left panel: folder-grouped thread list.
+- Global workspace mode switch:
+  - Manual mode: folder-grouped thread list on the left
+  - Automatic mode: Sophon workspace thread list on the left
 - Right panel: embedded terminal (terminal-only mode).
 
 Thread text behavior:
@@ -76,6 +88,7 @@ Thread text behavior:
 - Header title uses selected thread `title`.
 - Create Thread dialog displays per-agent install status (`installed` + `health_status`) before launch.
 - If a selected agent CLI is missing, Create is blocked and install guidance is shown.
+- If Sophon is missing, desktop can install a managed Sophon binary and then launch new/resumed Sophon sessions through that absolute path.
 - Settings provide active `Agent` plus per-agent supplier management (official + third-party), persisted in desktop local storage.
 - Each supplier supports profile, API base/key fields, and optional config JSON (`env`) overrides.
 - Embedded terminal launch requests carry `profile_name` and supplier env values, injecting them into CLI command context.
@@ -89,9 +102,14 @@ Consistency intent:
 From `apps/desktop/src-tauri/src/commands.rs`:
 - `list_threads`
 - `list_provider_install_statuses`
+- `get_sophon_workspace_path`
+- `install_sophon_cli`
+- `list_sophon_conductor_sessions`
+- `start_sophon_conductor_session`
 - `get_claude_thread_runtime_state`
 - `get_codex_thread_runtime_state`
 - `get_opencode_thread_runtime_state`
+- `get_sophon_thread_runtime_state`
 - `open_thread_in_terminal`
 - `open_new_thread_in_terminal`
 - `start_embedded_terminal`
@@ -123,15 +141,17 @@ Note:
 
 ### Completed
 
-- Three-agent contract alignment (TS/Rust)
-- Three-agent thread scanning + resume command path
+- Four-agent contract alignment (TS/Rust)
+- Four-agent thread scanning + resume command path
 - Desktop terminal-first continuation flow
+- Manual/automatic desktop workspace mode switch
+- Sophon CLI MVP with local session and conductor workspace state
 - Local DB initialization + migration baseline
 
 ### In Progress
 
 - Desktop interaction refinement (window drag/layout details)
-- Productized cross-agent switch orchestration strategy
+- Productized Sophon-led cross-agent orchestration strategy
 
 ### Not Complete Yet
 
@@ -142,5 +162,5 @@ Note:
 ## 6. Key Constraints
 
 - Desktop execution flow is terminal-only.
-- No current shared API for summary-based cross-agent switch orchestration.
+- Sophon currently tracks workspace coordination state and linked threads, but does not yet execute a full autonomous worker scheduling loop across all providers.
 - No in-app message composer/list send flow in current desktop build.

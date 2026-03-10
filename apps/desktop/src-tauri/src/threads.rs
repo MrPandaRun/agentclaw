@@ -1,11 +1,12 @@
 use provider_claude::{ClaudeAdapter, ClaudeThreadOverview, ClaudeThreadRuntimeState};
 use provider_codex::{CodexAdapter, CodexThreadOverview, CodexThreadRuntimeState};
 use provider_opencode::{OpenCodeAdapter, OpenCodeThreadOverview, OpenCodeThreadRuntimeState};
+use provider_sophon::{SophonAdapter, SophonThreadOverview, SophonThreadRuntimeState};
 use std::collections::HashMap;
 
 use crate::payloads::{
     ClaudeThreadRuntimeStatePayload, CodexThreadRuntimeStatePayload,
-    OpenCodeThreadRuntimeStatePayload, ThreadSummaryPayload,
+    OpenCodeThreadRuntimeStatePayload, SophonThreadRuntimeStatePayload, ThreadSummaryPayload,
 };
 
 pub fn list_threads(project_path: Option<&str>) -> Result<Vec<ThreadSummaryPayload>, String> {
@@ -33,9 +34,18 @@ pub fn list_threads(project_path: Option<&str>) -> Result<Vec<ThreadSummaryPaylo
                 error.code, error.message
             )
         })?;
+    let sophon_threads = SophonAdapter::new()
+        .list_thread_overviews(project_path)
+        .map_err(|error| {
+            format!(
+                "Failed to list Sophon threads ({:?}): {}",
+                error.code, error.message
+            )
+        })?;
 
-    let mut threads =
-        Vec::with_capacity(claude_threads.len() + codex_threads.len() + opencode_threads.len());
+    let mut threads = Vec::with_capacity(
+        claude_threads.len() + codex_threads.len() + opencode_threads.len() + sophon_threads.len(),
+    );
     threads.extend(claude_threads.into_iter().map(map_claude_thread_overview));
     threads.extend(codex_threads.into_iter().map(map_codex_thread_overview));
     threads.extend(
@@ -43,6 +53,7 @@ pub fn list_threads(project_path: Option<&str>) -> Result<Vec<ThreadSummaryPaylo
             .into_iter()
             .map(map_opencode_thread_overview),
     );
+    threads.extend(sophon_threads.into_iter().map(map_sophon_thread_overview));
     threads = dedupe_thread_summaries(threads);
     sort_thread_summaries(&mut threads);
 
@@ -91,6 +102,20 @@ pub fn get_opencode_thread_runtime_state(
     Ok(map_opencode_thread_runtime_state(state))
 }
 
+pub fn get_sophon_thread_runtime_state(
+    thread_id: &str,
+) -> Result<SophonThreadRuntimeStatePayload, String> {
+    let state = SophonAdapter::new()
+        .get_thread_runtime_state(thread_id)
+        .map_err(|error| {
+            format!(
+                "Failed to load Sophon runtime state ({:?}): {}",
+                error.code, error.message
+            )
+        })?;
+    Ok(map_sophon_thread_runtime_state(state))
+}
+
 fn map_claude_thread_overview(overview: ClaudeThreadOverview) -> ThreadSummaryPayload {
     ThreadSummaryPayload {
         id: overview.summary.id,
@@ -127,6 +152,18 @@ fn map_opencode_thread_overview(overview: OpenCodeThreadOverview) -> ThreadSumma
     }
 }
 
+fn map_sophon_thread_overview(overview: SophonThreadOverview) -> ThreadSummaryPayload {
+    ThreadSummaryPayload {
+        id: overview.summary.id,
+        provider_id: overview.summary.provider_id.as_str().to_string(),
+        project_path: overview.summary.project_path,
+        title: overview.summary.title,
+        tags: overview.summary.tags,
+        last_active_at: overview.summary.last_active_at,
+        last_message_preview: overview.last_message_preview,
+    }
+}
+
 fn map_codex_thread_runtime_state(
     state: CodexThreadRuntimeState,
 ) -> CodexThreadRuntimeStatePayload {
@@ -151,6 +188,16 @@ fn map_claude_thread_runtime_state(
     state: ClaudeThreadRuntimeState,
 ) -> ClaudeThreadRuntimeStatePayload {
     ClaudeThreadRuntimeStatePayload {
+        agent_answering: state.agent_answering,
+        last_event_kind: state.last_event_kind,
+        last_event_at_ms: state.last_event_at_ms,
+    }
+}
+
+fn map_sophon_thread_runtime_state(
+    state: SophonThreadRuntimeState,
+) -> SophonThreadRuntimeStatePayload {
+    SophonThreadRuntimeStatePayload {
         agent_answering: state.agent_answering,
         last_event_kind: state.last_event_kind,
         last_event_at_ms: state.last_event_at_ms,

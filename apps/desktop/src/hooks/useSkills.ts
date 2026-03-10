@@ -83,6 +83,7 @@ export function useSkills(): UseSkillsResult {
       claude_code: true,
       codex: true,
       opencode: true,
+      sophon: true,
       antigravity: true,
     };
 
@@ -95,6 +96,7 @@ export function useSkills(): UseSkillsResult {
         claude_code: parsed.claude_code ?? true,
         codex: parsed.codex ?? true,
         opencode: parsed.opencode ?? true,
+        sophon: parsed.sophon ?? true,
         antigravity: parsed.antigravity ?? true,
       };
     } catch {
@@ -242,8 +244,20 @@ export function useSkills(): UseSkillsResult {
         });
         setSkills((prev) => {
           const newState = enabled
-            ? { claude_code: true, codex: true, opencode: true, antigravity: true }
-            : { claude_code: false, codex: false, opencode: false, antigravity: false };
+            ? {
+                claude_code: true,
+                codex: true,
+                opencode: true,
+                sophon: true,
+                antigravity: true,
+              }
+            : {
+                claude_code: false,
+                codex: false,
+                opencode: false,
+                sophon: false,
+                antigravity: false,
+              };
           return prev.map((s) =>
             s.id === id
               ? { ...s, enabledJson: JSON.stringify(newState) }

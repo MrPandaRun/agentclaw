@@ -21,7 +21,7 @@ use crate::payloads::{
     TestMcpConnectionRequest, ToggleMcpServerEnabledRequest,
 };
 
-const SUPPORTED_PROVIDERS: [&str; 3] = ["claude_code", "codex", "opencode"];
+const SUPPORTED_PROVIDERS: [&str; 4] = ["claude_code", "codex", "opencode", "sophon"];
 const DEFAULT_SECRET_HEADER: &str = "Authorization";
 const HTTP_TEST_TIMEOUT_SECONDS: u64 = 6;
 const SENSITIVE_HEADER_KEYS: [&str; 5] = [
@@ -430,6 +430,10 @@ fn provider_discovery_paths(home_dir: &Path, provider_id: &str) -> Vec<PathBuf> 
             home_dir.join(".codex").join("settings.json"),
         ],
         "opencode" => opencode_config_paths(home_dir),
+        "sophon" => vec![
+            home_dir.join(".sophon").join("config.json"),
+            home_dir.join(".sophon").join("settings.json"),
+        ],
         _ => Vec::new(),
     };
 
@@ -2369,6 +2373,7 @@ fn build_provider_sync_document(
         "claude_code" => build_claude_sync_document(servers, existing_config),
         "codex" => build_codex_sync_document(servers, existing_config),
         "opencode" => build_opencode_sync_document(servers, existing_config),
+        "sophon" => build_fallback_sync_document(provider_id, servers),
         _ => build_fallback_sync_document(provider_id, servers),
     }
 }
@@ -2875,6 +2880,17 @@ fn resolve_provider_sync_path(home_dir: &Path, provider_id: &str) -> PathBuf {
                         .join("opencode")
                         .join("opencode.json")
                 })
+            }
+        }
+        "sophon" => {
+            let config_path = home_dir.join(".sophon").join("config.json");
+            let settings_path = home_dir.join(".sophon").join("settings.json");
+            if config_path.exists() {
+                config_path
+            } else if settings_path.exists() {
+                settings_path
+            } else {
+                config_path
             }
         }
         _ => home_dir

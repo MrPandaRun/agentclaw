@@ -1,5 +1,7 @@
 import type { AgentThreadSummary } from "@/types";
 
+const SOPHON_WORKSPACE_PATH_FRAGMENT = "/.sophon/workspace";
+
 export function formatLastActive(raw: string): string {
   const value = toTimestampMs(raw);
   if (!Number.isFinite(value)) {
@@ -64,6 +66,21 @@ export function threadKey(
   thread: Pick<AgentThreadSummary, "providerId" | "id">,
 ): string {
   return `${thread.providerId}:${thread.id}`;
+}
+
+export function isSophonWorkspacePath(path: string): boolean {
+  const normalized = normalizeProjectPath(path).replace(/\\/g, "/");
+  return (
+    normalized === `~${SOPHON_WORKSPACE_PATH_FRAGMENT}` ||
+    normalized.endsWith(SOPHON_WORKSPACE_PATH_FRAGMENT) ||
+    normalized.includes(`${SOPHON_WORKSPACE_PATH_FRAGMENT}/`)
+  );
+}
+
+export function isAutomaticModeThread(
+  thread: Pick<AgentThreadSummary, "providerId" | "projectPath">,
+): boolean {
+  return thread.providerId === "sophon" && isSophonWorkspacePath(thread.projectPath);
 }
 
 export function resolveSelectedThreadKey(

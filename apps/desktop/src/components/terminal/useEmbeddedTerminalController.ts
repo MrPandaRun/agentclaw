@@ -328,7 +328,8 @@ export function useEmbeddedTerminalController({
         if (
           session.providerId !== "codex" &&
           session.providerId !== "claude_code" &&
-          session.providerId !== "opencode"
+          session.providerId !== "opencode" &&
+          session.providerId !== "sophon"
         ) {
           void closeSessionById(session.sessionId);
           continue;
@@ -345,7 +346,9 @@ export function useEmbeddedTerminalController({
                 ? "get_claude_thread_runtime_state"
                 : providerId === "codex"
                   ? "get_codex_thread_runtime_state"
-                  : "get_opencode_thread_runtime_state";
+                  : providerId === "sophon"
+                    ? "get_sophon_thread_runtime_state"
+                    : "get_opencode_thread_runtime_state";
             const state = await invoke<ThreadRuntimeState>(command, {
               request: { threadId },
             });

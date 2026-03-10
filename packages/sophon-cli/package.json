@@ -1,0 +1,30 @@
+{
+  "name": "@agentdock/sophon-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "piConfig": {
+    "name": "sophon",
+    "configDir": ".pi"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "bin": {
+    "sophon": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.57.1"
+  }
+}

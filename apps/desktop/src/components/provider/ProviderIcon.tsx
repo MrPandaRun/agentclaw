@@ -1,6 +1,7 @@
 import claudeCodeSvgRaw from "@/assets/providers/claude-code.svg?raw";
 import openAiSvgRaw from "@/assets/providers/openai.svg?raw";
 import openCodeSvgRaw from "@/assets/providers/opencode.svg?raw";
+import sophonSvgRaw from "@/assets/providers/sophon.svg?raw";
 import { isSupportedProvider } from "@/lib/provider";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +11,7 @@ const PROVIDER_ICON_SVG_BY_ID: Record<ThreadProviderId, string> = {
   claude_code: claudeCodeSvgRaw,
   codex: openAiSvgRaw,
   opencode: openCodeSvgRaw,
+  sophon: sophonSvgRaw,
 };
 
 function normalizeSvgMarkup(raw: string): string {
@@ -22,6 +24,7 @@ const NORMALIZED_PROVIDER_ICON_SVG_BY_ID: Record<ThreadProviderId, string> = {
   claude_code: normalizeSvgMarkup(PROVIDER_ICON_SVG_BY_ID.claude_code),
   codex: normalizeSvgMarkup(PROVIDER_ICON_SVG_BY_ID.codex),
   opencode: normalizeSvgMarkup(PROVIDER_ICON_SVG_BY_ID.opencode),
+  sophon: normalizeSvgMarkup(PROVIDER_ICON_SVG_BY_ID.sophon),
 };
 
 function providerIconColorClass(providerId: ThreadProviderId): string {
@@ -30,6 +33,9 @@ function providerIconColorClass(providerId: ThreadProviderId): string {
   }
   if (providerId === "codex") {
     return "text-[#111111] dark:text-[#F2F2F2]";
+  }
+  if (providerId === "sophon") {
+    return "text-[#17594A] dark:text-[#86E7CF]";
   }
   return "text-[#211E1E] dark:text-[#F1ECEC]";
 }
