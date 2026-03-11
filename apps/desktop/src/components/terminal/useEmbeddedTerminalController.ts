@@ -19,6 +19,10 @@ import type {
   TerminalSessionState,
   ThreadRuntimeState,
 } from "./types";
+import {
+  rebindPendingNewThreadSession,
+  type PendingNewLaunchBinding,
+} from "./sessionBinding";
 import { useTerminalHostEffects } from "./useTerminalHostEffects";
 import { useTerminalSessionLifecycle } from "./useTerminalSessionLifecycle";
 
@@ -79,6 +83,7 @@ export function useEmbeddedTerminalController({
   const pendingResizeRef = useRef<{ cols: number; rows: number } | null>(null);
   const helpButtonRef = useRef<HTMLButtonElement | null>(null);
   const helpPopoverRef = useRef<HTMLDivElement | null>(null);
+  const pendingNewLaunchBindingRef = useRef<PendingNewLaunchBinding | null>(null);
   const lastHandledRefreshRequestRef = useRef(0);
   const [isSwitchingThread, setIsSwitchingThread] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -179,6 +184,33 @@ export function useEmbeddedTerminalController({
     setRefreshError(null);
     setHappyError(null);
   }, [launchTarget?.key]);
+
+  useEffect(() => {
+    if (launchTarget?.mode === "new") {
+      pendingNewLaunchBindingRef.current = {
+        sessionKey: launchTarget.key,
+        providerId: launchTarget.providerId,
+        profileName: launchTarget.profileName,
+        projectPath: launchTarget.projectPath,
+        launchEnvSignature: envSignature(launchTarget.launchEnv),
+        knownThreadKeys: new Set(launchTarget.knownThreadKeys),
+      };
+      return;
+    }
+
+    if (launchTarget?.mode === "resume") {
+      rebindPendingNewThreadSession({
+        launchTarget,
+        pendingBinding: pendingNewLaunchBindingRef.current,
+        activeSessionId: sessionIdRef.current,
+        launchEnvSignature: envSignature(launchTarget.launchEnv),
+        sessionsByThread: sessionsByThreadRef.current,
+        sessionsById: sessionsByIdRef.current,
+      });
+    }
+
+    pendingNewLaunchBindingRef.current = null;
+  }, [launchTarget]);
 
   const handleRefreshSession = useCallback(() => {
     if (isRefreshing || starting || isSwitchingThread) {
