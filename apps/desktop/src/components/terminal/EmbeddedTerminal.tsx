@@ -116,7 +116,7 @@ export function EmbeddedTerminal({
         </div>
       ) : null}
       <div
-        className="pointer-events-none absolute left-1.5 top-2 text-[11px]"
+        className="pointer-events-none absolute left-1.5 top-2 max-w-[calc(100%-24px)] overflow-hidden text-ellipsis whitespace-nowrap text-[11px]"
         style={{ color: activeTheme.commandText }}
       >
         {isRefreshing ? (
@@ -130,7 +130,7 @@ export function EmbeddedTerminal({
             Starting terminal session...
           </span>
         ) : lastCommand ? (
-          <span className="truncate">{lastCommand}</span>
+          <span title={lastCommand}>{lastCommand}</span>
         ) : null}
       </div>
       {refreshError ? (
