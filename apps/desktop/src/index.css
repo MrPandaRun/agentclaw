@@ -27,6 +27,9 @@
     --brand-codex: 168 84% 34%;
     --brand-opencode: 186 88% 42%;
     --radius: 0.82rem;
+    --border-width: 1px;
+    --shadow-offset: 0px;
+    --shadow-color: 0 0% 0%;
   }
 
   .dark {
@@ -52,6 +55,108 @@
     --brand-claude: 16 70% 58%;
     --brand-codex: 168 84% 34%;
     --brand-opencode: 186 88% 42%;
+    --shadow-color: 0 0% 100%;
+  }
+
+  /* Brutalism skin - light mode */
+  .brutalism {
+    --background: 48 33% 98%;
+    --foreground: 0 0% 5%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 5%;
+    --primary: 48 100% 50%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 0 0% 5%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 215 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 5%;
+    --input: 0 0% 5%;
+    --ring: 48 100% 50%;
+    --radius: 0rem;
+    --border-width: 3px;
+    --shadow-offset: 4px;
+    --shadow-color: 0 0% 5%;
+  }
+
+  /* Brutalism skin - dark mode */
+  .dark.brutalism {
+    --background: 0 0% 5%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 48 100% 50%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 215 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 48 100% 50%;
+    --shadow-color: 0 0% 90%;
+  }
+
+  /* Cyberpunk skin - dark mode (primary) */
+  .cyberpunk {
+    --background: 270 50% 5%;
+    --foreground: 180 100% 95%;
+    --card: 270 40% 8%;
+    --card-foreground: 180 100% 95%;
+    --popover: 270 40% 10%;
+    --popover-foreground: 180 100% 95%;
+    --primary: 180 100% 50%;
+    --primary-foreground: 270 50% 5%;
+    --secondary: 280 60% 15%;
+    --secondary-foreground: 300 100% 90%;
+    --muted: 270 30% 15%;
+    --muted-foreground: 280 30% 60%;
+    --accent: 300 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 350 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 280 50% 25%;
+    --input: 280 50% 20%;
+    --ring: 180 100% 50%;
+    --radius: 0.25rem;
+    --border-width: 1px;
+    --shadow-offset: 0px;
+    --shadow-color: 180 100% 50%;
+    --neon-cyan: 180 100% 50%;
+    --neon-magenta: 300 100% 50%;
+    --neon-yellow: 55 100% 50%;
+    --neon-purple: 280 100% 50%;
+  }
+
+  /* Cyberpunk skin - light mode variant */
+  .dark.cyberpunk {
+    --background: 270 50% 5%;
+    --foreground: 180 100% 95%;
+    --card: 270 40% 8%;
+    --card-foreground: 180 100% 95%;
+    --popover: 270 40% 10%;
+    --popover-foreground: 180 100% 95%;
+  }
+
+  .cyberpunk.light {
+    --background: 270 20% 95%;
+    --foreground: 270 50% 10%;
+    --card: 270 15% 98%;
+    --card-foreground: 270 50% 10%;
+    --popover: 270 15% 98%;
+    --popover-foreground: 270 50% 10%;
   }
 
   * {
@@ -72,5 +177,141 @@
       "Noto Sans CJK SC",
       "Microsoft YaHei",
       sans-serif;
+  }
+
+  .brutalism body,
+  body.brutalism {
+    font-family:
+      "JetBrains Mono",
+      "IBM Plex Mono",
+      monospace;
+  }
+
+  /* Cyberpunk skin - dark mode (primary) */
+  .cyberpunk {
+    --background: 270 50% 6%;
+    --foreground: 180 100% 90%;
+    --card: 270 40% 10%;
+    --card-foreground: 180 100% 90%;
+    --popover: 270 40% 12%;
+    --popover-foreground: 180 100% 90%;
+    --primary: 180 100% 50%;
+    --primary-foreground: 270 50% 6%;
+    --secondary: 280 40% 20%;
+    --secondary-foreground: 180 100% 90%;
+    --muted: 280 30% 18%;
+    --muted-foreground: 180 60% 60%;
+    --accent: 300 100% 50%;
+    --accent-foreground: 270 50% 6%;
+    --destructive: 350 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 280 50% 30%;
+    --input: 280 50% 25%;
+    --ring: 180 100% 50%;
+    --radius: 0.25rem;
+    --border-width: 1px;
+    --shadow-offset: 0px;
+    --shadow-color: 180 100% 50%;
+  }
+
+  /* Cyberpunk skin - light mode variant */
+  .light.cyberpunk {
+    --background: 270 30% 95%;
+    --foreground: 270 50% 15%;
+    --card: 270 20% 98%;
+    --card-foreground: 270 50% 15%;
+    --popover: 270 20% 100%;
+    --popover-foreground: 270 50% 15%;
+    --primary: 180 100% 40%;
+    --primary-foreground: 270 30% 95%;
+    --secondary: 280 30% 88%;
+    --secondary-foreground: 270 50% 15%;
+    --muted: 280 20% 90%;
+    --muted-foreground: 270 30% 45%;
+    --accent: 300 100% 40%;
+    --accent-foreground: 270 30% 95%;
+    --border: 280 30% 75%;
+    --input: 280 30% 80%;
+    --shadow-color: 180 100% 40%;
+  }
+
+  .cyberpunk body,
+  body.cyberpunk {
+    font-family:
+      "JetBrains Mono",
+      "IBM Plex Mono",
+      monospace;
+  }
+}
+
+@layer components {
+  /* Brutalism utility classes */
+  .brutal-border {
+    border-width: var(--border-width);
+    border-style: solid;
+    border-color: hsl(var(--border));
+  }
+
+  .brutal-shadow {
+    box-shadow: var(--shadow-offset) var(--shadow-offset) 0 hsl(var(--shadow-color));
+  }
+
+  .brutal-shadow-sm {
+    box-shadow: calc(var(--shadow-offset) * 0.5) calc(var(--shadow-offset) * 0.5) 0 hsl(var(--shadow-color));
+  }
+
+  .brutal-shadow-lg {
+    box-shadow: calc(var(--shadow-offset) * 1.5) calc(var(--shadow-offset) * 1.5) 0 hsl(var(--shadow-color));
+  }
+
+  .brutal-hover {
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+
+  .brutal-hover:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: calc(var(--shadow-offset) + 2px) calc(var(--shadow-offset) + 2px) 0 hsl(var(--shadow-color));
+  }
+
+  .brutal-active:active {
+    transform: translate(var(--shadow-offset), var(--shadow-offset));
+    box-shadow: 0 0 0 hsl(var(--shadow-color));
+  }
+
+  /* Cyberpunk utility classes */
+  .cyber-glow {
+    box-shadow:
+      0 0 5px hsl(var(--neon-cyan) / 0.5),
+      0 0 10px hsl(var(--neon-cyan) / 0.3),
+      0 0 20px hsl(var(--neon-cyan) / 0.1);
+  }
+
+  .cyber-glow-magenta {
+    box-shadow:
+      0 0 5px hsl(var(--neon-magenta) / 0.5),
+      0 0 10px hsl(var(--neon-magenta) / 0.3),
+      0 0 20px hsl(var(--neon-magenta) / 0.1);
+  }
+
+  .cyber-border {
+    border: 1px solid hsl(var(--neon-cyan) / 0.6);
+    box-shadow: inset 0 0 10px hsl(var(--neon-cyan) / 0.1);
+  }
+
+  .cyber-text-glow {
+    text-shadow:
+      0 0 5px currentColor,
+      0 0 10px currentColor;
+  }
+
+  .cyber-scanlines {
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      hsl(var(--background) / 0.1) 2px,
+      hsl(var(--background) / 0.1) 4px
+    );
+    pointer-events: none;
   }
 }

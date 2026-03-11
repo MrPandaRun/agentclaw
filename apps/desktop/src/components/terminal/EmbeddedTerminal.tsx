@@ -11,11 +11,12 @@ import type {
   EmbeddedTerminalThread,
 } from "@/components/terminal/types";
 import { useEmbeddedTerminalController } from "@/components/terminal/useEmbeddedTerminalController";
-import type { TerminalTheme } from "@/types";
+import type { AppSkin, TerminalTheme } from "@/types";
 
 interface EmbeddedTerminalProps {
   thread: EmbeddedTerminalThread | null;
   terminalTheme: TerminalTheme;
+  appSkin?: AppSkin;
   launchRequest?: EmbeddedTerminalNewThreadLaunch | null;
   onLaunchRequestSettled?: (payload: EmbeddedTerminalLaunchSettledPayload) => void;
   onActiveSessionExit?: () => void;
@@ -25,6 +26,7 @@ interface EmbeddedTerminalProps {
 export function EmbeddedTerminal({
   thread,
   terminalTheme,
+  appSkin = "default",
   launchRequest,
   onLaunchRequestSettled,
   onActiveSessionExit,
@@ -50,6 +52,7 @@ export function EmbeddedTerminal({
   } = useEmbeddedTerminalController({
     thread,
     terminalTheme,
+    appSkin,
     launchRequest,
     onLaunchRequestSettled,
     onActiveSessionExit,

@@ -103,6 +103,7 @@ export interface AgentRuntimeSettings {
 export type AppWorkspaceMode = "manual" | "automatic";
 export type AppTheme = "light" | "dark" | "system";
 export type TerminalTheme = "dark" | "light";
+export type AppSkin = "default" | "brutalism" | "cyberpunk";
 
 export interface SkillEnabledState {
   claude_code: boolean;

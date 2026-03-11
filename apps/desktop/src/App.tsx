@@ -33,6 +33,7 @@ import type {
   AgentSupplier,
   AppWorkspaceMode,
   AppTheme,
+  AppSkin,
   OpenTargetId,
   OpenTargetStatus,
   ProjectGitBranchInfo,
@@ -43,6 +44,7 @@ import type {
 } from "@/types";
 
 const APP_THEME_KEY = "agentdock.desktop.app_theme";
+const APP_SKIN_KEY = "agentdock.desktop.app_skin";
 const AGENT_RUNTIME_SETTINGS_KEY = "agentdock.desktop.agent_runtime_settings";
 const APP_WORKSPACE_MODE_KEY = "agentdock.desktop.workspace_mode";
 const LEGACY_AGENT_PROFILE_SETTINGS_KEY = "agentdock.desktop.agent_profile_settings";
@@ -97,6 +99,14 @@ function readStoredAppTheme(): AppTheme {
   }
   const raw = window.localStorage.getItem(APP_THEME_KEY);
   return raw === "dark" || raw === "system" ? raw : "light";
+}
+
+function readStoredAppSkin(): AppSkin {
+  if (typeof window === "undefined") {
+    return "default";
+  }
+  const raw = window.localStorage.getItem(APP_SKIN_KEY);
+  return raw === "brutalism" ? "brutalism" : "default";
 }
 
 function readStoredWorkspaceMode(): AppWorkspaceMode {
@@ -719,6 +729,7 @@ function validateAgentRuntimeSettings(settings: AgentRuntimeSettings): string | 
 
 function App() {
   const [appTheme, setAppTheme] = useState<AppTheme>(readStoredAppTheme);
+  const [appSkin, setAppSkin] = useState<AppSkin>(readStoredAppSkin);
   const [workspaceMode, setWorkspaceMode] = useState<AppWorkspaceMode>(readStoredWorkspaceMode);
   const [agentRuntimeSettings, setAgentRuntimeSettings] = useState<AgentRuntimeSettings>(
     readStoredAgentRuntimeSettings,
@@ -1222,8 +1233,16 @@ function App() {
     }
     const root = document.documentElement;
     root.classList.toggle("dark", resolvedTheme === "dark");
+    root.classList.toggle("brutalism", appSkin === "brutalism");
     root.style.colorScheme = resolvedTheme;
-  }, [resolvedTheme]);
+  }, [resolvedTheme, appSkin]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(APP_SKIN_KEY, appSkin);
+  }, [appSkin]);
 
   return (
     <main className="relative h-full min-h-0 select-none overflow-hidden bg-background">
@@ -1253,6 +1272,7 @@ function App() {
           newThreadBindingStatus={newThreadBindingStatus}
           hasPendingNewThreadLaunch={newThreadLaunch !== null}
           appTheme={appTheme}
+          appSkin={appSkin}
           activeProviderId={activeProviderId}
           activeProfileName={activeProfileName}
           providerProfiles={providerProfiles}
@@ -1271,6 +1291,7 @@ function App() {
           onWorkspaceModeChange={handleWorkspaceModeChange}
           onAgentRuntimeSettingsChange={handleAgentRuntimeSettingsChange}
           onAppThemeChange={setAppTheme}
+          onAppSkinChange={setAppSkin}
           onClearError={() => setError(null)}
         />
 
@@ -1348,6 +1369,7 @@ function App() {
                 }
                 launchRequest={newThreadLaunch}
                 terminalTheme={resolvedTheme}
+                appSkin={appSkin}
                 onLaunchRequestSettled={handleNewThreadLaunchSettled}
                 onActiveSessionExit={handleEmbeddedTerminalSessionExit}
                 onError={setError}

@@ -40,6 +40,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { JsonCodeEditor } from "@/components/ui/json-code-editor";
+import { Separator } from "@/components/ui/separator";
 import {
   isSupportedProvider,
   providerDisplayName,
@@ -58,6 +59,7 @@ import type {
   AppWorkspaceMode,
   AgentSupplier,
   AppTheme,
+  AppSkin,
   ProviderInstallStatus,
   ProviderProfileMap,
   ThreadProviderId,
@@ -140,6 +142,18 @@ const APP_THEME_OPTIONS: AppThemeOption[] = [
   { value: "light", label: "Light", Icon: Sun },
   { value: "dark", label: "Dark", Icon: Moon },
   { value: "system", label: "System", Icon: Monitor },
+];
+
+interface AppSkinOption {
+  value: AppSkin;
+  label: string;
+  description: string;
+}
+
+const APP_SKIN_OPTIONS: AppSkinOption[] = [
+  { value: "default", label: "Default", description: "Clean modern design" },
+  { value: "brutalism", label: "Brutalism", description: "Bold borders & shadows" },
+  { value: "cyberpunk", label: "Cyberpunk", description: "Neon glow & tech" },
 ];
 
 const THREAD_PROVIDER_OPTIONS: ProviderOption[] = [
@@ -1468,6 +1482,7 @@ export interface SidebarProps {
   newThreadBindingStatus: "starting" | "awaiting_discovery" | null;
   hasPendingNewThreadLaunch: boolean;
   appTheme: AppTheme;
+  appSkin: AppSkin;
   activeProviderId: ThreadProviderId;
   activeProfileName: string;
   providerProfiles: ProviderProfileMap;
@@ -1484,6 +1499,7 @@ export interface SidebarProps {
     selection: AgentRuntimeSettings,
   ) => Promise<string | null>;
   onAppThemeChange: (theme: AppTheme) => void;
+  onAppSkinChange: (skin: AppSkin) => void;
   onClearError: () => void;
 }
 
@@ -1502,6 +1518,7 @@ export function Sidebar({
   newThreadBindingStatus,
   hasPendingNewThreadLaunch,
   appTheme,
+  appSkin,
   activeProviderId,
   activeProfileName,
   providerProfiles,
@@ -1513,6 +1530,7 @@ export function Sidebar({
   onWorkspaceModeChange,
   onAgentRuntimeSettingsChange,
   onAppThemeChange,
+  onAppSkinChange,
   onClearError,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -1522,6 +1540,7 @@ export function Sidebar({
   const [mcpDialogOpen, setMcpDialogOpen] = useState(false);
   const [skillsDialogOpen, setSkillsDialogOpen] = useState(false);
   const [pendingTheme, setPendingTheme] = useState<AppTheme>(appTheme);
+  const [pendingSkin, setPendingSkin] = useState<AppSkin>(appSkin);
   const [pendingActiveProviderId, setPendingActiveProviderId] =
     useState<ThreadProviderId>(activeProviderId);
   const [pendingRuntimeSettings, setPendingRuntimeSettings] =
@@ -1744,8 +1763,9 @@ export function Sidebar({
   useEffect(() => {
     if (!themeDialogOpen) {
       setPendingTheme(appTheme);
+      setPendingSkin(appSkin);
     }
-  }, [appTheme, themeDialogOpen]);
+  }, [appTheme, appSkin, themeDialogOpen]);
 
   useEffect(() => {
     if (!accountDialogOpen) {
@@ -1831,9 +1851,6 @@ export function Sidebar({
 
   const selectedThemeOption = APP_THEME_OPTIONS.find(
     (option) => option.value === appTheme,
-  );
-  const pendingThemeOption = APP_THEME_OPTIONS.find(
-    (option) => option.value === pendingTheme,
   );
   const activeProviderOption = THREAD_PROVIDER_OPTIONS.find(
     (option) => option.value === activeProviderId,
@@ -1932,6 +1949,7 @@ export function Sidebar({
 
   const applyThemeChange = () => {
     onAppThemeChange(pendingTheme);
+    onAppSkinChange(pendingSkin);
     setThemeDialogOpen(false);
   };
 
@@ -3429,30 +3447,55 @@ export function Sidebar({
             onClick={(event) => event.stopPropagation()}
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">App Theme</CardTitle>
+              <CardTitle className="text-base">Appearance</CardTitle>
               <CardDescription className="text-xs">
-                Choose the appearance for the entire desktop app.
+                Choose the theme and skin for the desktop app.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {APP_THEME_OPTIONS.map(({ value, label, Icon }) => (
-                <Button
-                  key={value}
-                  type="button"
-                  variant={pendingTheme === value ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-9 w-full items-center justify-between px-2.5 text-xs"
-                  onClick={() => setPendingTheme(value)}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </span>
-                  {pendingTheme === value ? (
-                    <Check className="h-3.5 w-3.5" />
-                  ) : null}
-                </Button>
-              ))}
+            <CardContent className="space-y-3">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Theme</p>
+                {APP_THEME_OPTIONS.map(({ value, label, Icon }) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={pendingTheme === value ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-9 w-full items-center justify-between px-2.5 text-xs"
+                    onClick={() => setPendingTheme(value)}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                    </span>
+                    {pendingTheme === value ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : null}
+                  </Button>
+                ))}
+              </div>
+              <Separator />
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Skin</p>
+                {APP_SKIN_OPTIONS.map(({ value, label, description }) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={pendingSkin === value ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-auto w-full items-center justify-between px-2.5 py-2 text-xs"
+                    onClick={() => setPendingSkin(value)}
+                  >
+                    <span className="flex flex-col items-start gap-0.5 text-left">
+                      <span>{label}</span>
+                      <span className="text-[10px] text-muted-foreground">{description}</span>
+                    </span>
+                    {pendingSkin === value ? (
+                      <Check className="h-3.5 w-3.5 shrink-0" />
+                    ) : null}
+                  </Button>
+                ))}
+              </div>
               <div className="flex items-center justify-end gap-2 pt-1">
                 <Button
                   type="button"
@@ -3473,9 +3516,6 @@ export function Sidebar({
                   Apply
                 </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Current: {pendingThemeOption?.label ?? "Light"}
-              </p>
             </CardContent>
           </Card>
         </div>
