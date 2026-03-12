@@ -48,6 +48,14 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      boxShadow: {
+        brutal: "4px 4px 0 hsl(var(--shadow-color))",
+        "brutal-sm": "2px 2px 0 hsl(var(--shadow-color))",
+        "brutal-lg": "6px 6px 0 hsl(var(--shadow-color))",
+      },
+      fontFamily: {
+        mono: ["JetBrains Mono", "IBM Plex Mono", "monospace"],
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },

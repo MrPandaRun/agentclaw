@@ -1,6 +1,8 @@
+export type ThreadProviderId = "claude_code" | "codex" | "opencode" | "sophon";
+
 export interface AgentThreadSummary {
   id: string;
-  providerId: "claude_code" | string;
+  providerId: ThreadProviderId | string;
   projectPath: string;
   title: string;
   tags: string[];
@@ -8,11 +10,34 @@ export interface AgentThreadSummary {
   lastMessagePreview?: string | null;
 }
 
+export interface SophonConductorSessionSummary {
+  id: string;
+  title: string;
+  workspacePath: string;
+  status: string;
+  createdAt: string;
+  lastActiveAt: string;
+  workerAgents: string[];
+  linkedThreadKeys: string[];
+}
+
 export interface ProviderInstallStatus {
   providerId: ThreadProviderId;
   installed: boolean;
   healthStatus: "healthy" | "degraded" | "offline" | string;
   message?: string | null;
+}
+
+export interface SyncSophonAccountResult {
+  settingsPath: string;
+  authPath: string;
+  modelsPath: string;
+  provider?: string | null;
+  model?: string | null;
+  thinkingLevel?: string | null;
+  settingsUpdated?: boolean;
+  authUpdated?: boolean;
+  modelsUpdated?: boolean;
 }
 
 export type OpenTargetId =
@@ -75,14 +100,16 @@ export interface AgentRuntimeSettings {
   suppliersByProvider: AgentSupplierMap;
 }
 
-export type ThreadProviderId = "claude_code" | "codex" | "opencode";
+export type AppWorkspaceMode = "manual" | "automatic";
 export type AppTheme = "light" | "dark" | "system";
 export type TerminalTheme = "dark" | "light";
+export type AppSkin = "default" | "brutalism" | "cyberpunk";
 
 export interface SkillEnabledState {
   claude_code: boolean;
   codex: boolean;
   opencode: boolean;
+  sophon: boolean;
   antigravity: boolean;
 }
 
@@ -157,6 +184,7 @@ export interface McpServer {
   argsJson: string;
   headersJson: string;
   envJson: string;
+  extraJson: string;
   scopeProviders: string[];
   enabled: boolean;
   version: string;

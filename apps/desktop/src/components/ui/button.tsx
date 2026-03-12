@@ -19,6 +19,14 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        brutal:
+          "rounded-none border-[var(--border-width)] border-border bg-background font-mono uppercase tracking-wide shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-brutal-lg active:translate-x-1 active:translate-y-1 active:shadow-none",
+        "brutal-primary":
+          "rounded-none border-[var(--border-width)] border-border bg-primary font-mono uppercase tracking-wide text-primary-foreground shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-brutal-lg active:translate-x-1 active:translate-y-1 active:shadow-none",
+        "brutal-accent":
+          "rounded-none border-[var(--border-width)] border-border bg-accent font-mono uppercase tracking-wide text-accent-foreground shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-brutal-lg active:translate-x-1 active:translate-y-1 active:shadow-none",
+        "brutal-destructive":
+          "rounded-none border-[var(--border-width)] border-border bg-destructive font-mono uppercase tracking-wide text-destructive-foreground shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-brutal-lg active:translate-x-1 active:translate-y-1 active:shadow-none",
       },
       size: {
         default: "h-9 px-4 py-2",

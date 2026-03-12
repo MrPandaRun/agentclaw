@@ -1,10 +1,10 @@
 # AgentClaw
 
-面向 `codex`、`claude_code`、`opencode` 的本地优先（local-first）编码代理控制平面。
+面向 `codex`、`claude_code`、`opencode`、`sophon` 的本地优先（local-first）编码代理控制平面。
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-AgentClaw 帮助你在同一个桌面工作台中查看并恢复 Agent 原生线程，不替代上游 CLI。
+AgentClaw 帮助你在同一个桌面工作台中查看并恢复 Agent 原生线程，不替代上游 CLI。`Sophon` 是仓库内实现的第一方 Agent，可独立作为 CLI 运行，也可在桌面端自动模式下承担编排角色。
 
 ## Why AgentClaw
 
@@ -17,27 +17,34 @@ AgentClaw 帮助你在同一个桌面工作台中查看并恢复 Agent 原生线
 
 - Project / 项目：左侧栏按文件夹维度的一级分组。
 - Thread / 线程：UI 中展示的一次交互单元。
-- Agent / 代理：主要执行载体（`codex` / `claude_code` / `opencode`）。
+- Agent / 代理：主要执行载体（`codex` / `claude_code` / `opencode` / `sophon`）。
 - Model Provider / 模型提供者：Agent 运行时使用的模型服务方（如 OpenAI、Anthropic、OpenRouter）。
+- Conductor：Sophon 在 `~/.sophon/workspace` 中协调其他 Agent 时使用的内部角色术语。
 
 ## Feature Snapshot
 
 | 能力 | 状态 | 说明 |
 | --- | --- | --- |
-| Agent 范围（`codex`、`claude_code`、`opencode`） | Now | TS 与 Rust 契约已对齐（在契约中表现为 Provider ID）。 |
+| Agent 范围（`codex`、`claude_code`、`opencode`、`sophon`） | Now | TS 与 Rust 契约已对齐（在契约中表现为 Provider ID）。 |
 | 本地优先桌面运行时（Tauri + React） | Now | Rust host + React/Vite UI。 |
-| 统一线程列表 + 恢复 | Now | 三个适配器已接入线程扫描和恢复命令路径。 |
+| 统一线程列表 + 恢复 | Now | 四个适配器已接入线程扫描和恢复命令路径。 |
 | 桌面执行模式 | Now | terminal-only（内嵌 PTY + 外部终端启动）。 |
-| 跨 Agent 摘要编排 | Planned | 当前 `ProviderAdapter` 契约未包含此接口。 |
+| 全局工作模式切换 | Now | 手动模式保留按文件夹聚合线程；自动模式聚焦 Sophon workspace 线程。 |
+| Sophon 第一方 CLI | MVP | 已实现本地会话存储、skills 发现、workspace conductor session 和稳定 JSON 命令。 |
+| 自动化跨 Agent worker 执行 | In Progress | Sophon 当前已维护编排状态和关联线程；完整 worker 执行调度尚未完成。 |
 | 移动端远程控制流程 | Planned | Expo 壳层已存在，完整闭环尚未完成。 |
 
 ## 当前桌面行为
 
-- 左侧按项目文件夹分组展示线程。
+- 全局模式切换：
+  - 手动模式保留原始左侧按文件夹聚合线程，右侧为集成终端。
+  - 自动模式将左侧切换为 `~/.sophon/workspace` 下的 Sophon 线程，右侧仍然是集成终端。
+- 手动模式下，左侧按项目文件夹分组展示线程。
 - 线程数据包含 `title` 和可选的 `lastMessagePreview`。
 - 左侧条目文本优先使用 `title`；为空时回退到 `lastMessagePreview`。
 - Header 标题使用当前选中线程的 `title`。
 - 新建 Thread 弹窗会检查各 Agent CLI 的安装状态，未安装时提供安装引导。
+- 若缺少 Sophon，桌面端可安装托管 Sophon 二进制，并在新建/恢复线程时优先使用该绝对路径。
 - 设置中可按 Agent 切换供应商（官方 default + 第三方），并为每个供应商配置 Profile 与可选 Config JSON/env；选择会本地持久化并应用到终端会话启动。
 - 适配器标题策略优先 Agent 官方标题，其次回退到用户输入。
 
@@ -66,6 +73,7 @@ bun run dev
   - `codex`
   - `claude`（对应 `claude_code`）
   - `opencode`
+- 开发态下，Sophon 可通过 Bun 从 `packages/sophon-cli` 构建为托管二进制。若桌面安装成功，则不要求系统里预先存在全局 `sophon` 命令。
 
 可选环境变量覆盖：
 
@@ -76,6 +84,8 @@ bun run dev
 | `AGENTDOCK_CLAUDE_BIN` | 覆盖 Claude CLI 二进制名称/路径。 |
 | `AGENTDOCK_OPENCODE_DATA_DIR` | 覆盖 OpenCode 数据目录根路径。 |
 | `AGENTDOCK_OPENCODE_BIN` | 覆盖 OpenCode CLI 二进制名称/路径。 |
+| `AGENTDOCK_SOPHON_BIN` | 覆盖桌面端与 Rust 适配器使用的 Sophon CLI 二进制名称/路径。 |
+| `SOPHON_HOME` | 覆盖 Sophon 根目录（默认：`~/.sophon`）。 |
 
 ## Development Commands
 
@@ -102,7 +112,7 @@ cargo test -p provider-codex -- list_threads_reads_codex_sessions
 Provider ID 固定为：
 
 ```ts
-type ProviderId = "codex" | "claude_code" | "opencode";
+type ProviderId = "codex" | "claude_code" | "opencode" | "sophon";
 ```
 
 共享契约文件：
@@ -114,9 +124,16 @@ type ProviderId = "codex" | "claude_code" | "opencode";
 - `list_threads`
 - `resume_thread`
 
+桌面端依赖的 Sophon CLI 稳定命令包括：
+- `sophon health --json`
+- `sophon threads list --json`
+- `sophon threads runtime --thread-id <id> --json`
+- `sophon conductor sessions list --json`
+
 ## 文档索引
 
 - 当前实现摘要：[`docs/agentdock-current-product-summary.md`](./docs/agentdock-current-product-summary.md)
+- Sophon Agent 与工作模式：[`docs/sophon.md`](./docs/sophon.md)
 - 当前 Phase 1 执行规范：[`docs/agentdock-phase1-prd.md`](./docs/agentdock-phase1-prd.md)
 - 带勘误的历史规划文档：
   - [`Project-AgentDock.md`](./Project-AgentDock.md)

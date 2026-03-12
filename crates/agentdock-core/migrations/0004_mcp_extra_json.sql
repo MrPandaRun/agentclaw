@@ -1,0 +1,1 @@
+ALTER TABLE mcps ADD COLUMN extra_json TEXT NOT NULL DEFAULT '{}';

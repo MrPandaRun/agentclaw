@@ -11,11 +11,12 @@ import type {
   EmbeddedTerminalThread,
 } from "@/components/terminal/types";
 import { useEmbeddedTerminalController } from "@/components/terminal/useEmbeddedTerminalController";
-import type { TerminalTheme } from "@/types";
+import type { AppSkin, TerminalTheme } from "@/types";
 
 interface EmbeddedTerminalProps {
   thread: EmbeddedTerminalThread | null;
   terminalTheme: TerminalTheme;
+  appSkin?: AppSkin;
   launchRequest?: EmbeddedTerminalNewThreadLaunch | null;
   onLaunchRequestSettled?: (payload: EmbeddedTerminalLaunchSettledPayload) => void;
   onActiveSessionExit?: () => void;
@@ -25,6 +26,7 @@ interface EmbeddedTerminalProps {
 export function EmbeddedTerminal({
   thread,
   terminalTheme,
+  appSkin = "default",
   launchRequest,
   onLaunchRequestSettled,
   onActiveSessionExit,
@@ -50,6 +52,7 @@ export function EmbeddedTerminal({
   } = useEmbeddedTerminalController({
     thread,
     terminalTheme,
+    appSkin,
     launchRequest,
     onLaunchRequestSettled,
     onActiveSessionExit,
@@ -116,7 +119,7 @@ export function EmbeddedTerminal({
         </div>
       ) : null}
       <div
-        className="pointer-events-none absolute left-1.5 top-2 text-[11px]"
+        className="pointer-events-none absolute left-1.5 top-2 max-w-[calc(100%-24px)] overflow-hidden text-ellipsis whitespace-nowrap text-[11px]"
         style={{ color: activeTheme.commandText }}
       >
         {isRefreshing ? (
@@ -130,7 +133,7 @@ export function EmbeddedTerminal({
             Starting terminal session...
           </span>
         ) : lastCommand ? (
-          <span className="truncate">{lastCommand}</span>
+          <span title={lastCommand}>{lastCommand}</span>
         ) : null}
       </div>
       {refreshError ? (

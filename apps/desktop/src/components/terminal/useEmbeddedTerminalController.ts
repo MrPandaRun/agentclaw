@@ -7,9 +7,9 @@ import type { RefObject } from "react";
 
 import type { TerminalProviderHelpDoc } from "@/components/terminal/helpDocs";
 import { TERMINAL_PROVIDER_HELP_DOCS } from "@/components/terminal/helpDocs";
-import { TERMINAL_THEMES, type TerminalVisualTheme } from "@/components/terminal/theme";
+import { TERMINAL_THEMES, BRUTALISM_TERMINAL_THEMES, CYBERPUNK_TERMINAL_THEMES, type TerminalVisualTheme } from "@/components/terminal/theme";
 import { isSupportedProvider } from "@/lib/provider";
-import type { TerminalTheme, ThreadProviderId } from "@/types";
+import type { AppSkin, TerminalTheme, ThreadProviderId } from "@/types";
 
 import type {
   EmbeddedTerminalLaunchSettledPayload,
@@ -19,12 +19,17 @@ import type {
   TerminalSessionState,
   ThreadRuntimeState,
 } from "./types";
+import {
+  rebindPendingNewThreadSession,
+  type PendingNewLaunchBinding,
+} from "./sessionBinding";
 import { useTerminalHostEffects } from "./useTerminalHostEffects";
 import { useTerminalSessionLifecycle } from "./useTerminalSessionLifecycle";
 
 interface UseEmbeddedTerminalControllerProps {
   thread: EmbeddedTerminalThread | null;
   terminalTheme: TerminalTheme;
+  appSkin?: AppSkin;
   launchRequest?: EmbeddedTerminalNewThreadLaunch | null;
   onLaunchRequestSettled?: (payload: EmbeddedTerminalLaunchSettledPayload) => void;
   onActiveSessionExit?: () => void;
@@ -63,6 +68,7 @@ function envSignature(env?: Record<string, string>): string {
 export function useEmbeddedTerminalController({
   thread,
   terminalTheme,
+  appSkin = "default",
   launchRequest,
   onLaunchRequestSettled,
   onActiveSessionExit,
@@ -79,6 +85,7 @@ export function useEmbeddedTerminalController({
   const pendingResizeRef = useRef<{ cols: number; rows: number } | null>(null);
   const helpButtonRef = useRef<HTMLButtonElement | null>(null);
   const helpPopoverRef = useRef<HTMLDivElement | null>(null);
+  const pendingNewLaunchBindingRef = useRef<PendingNewLaunchBinding | null>(null);
   const lastHandledRefreshRequestRef = useRef(0);
   const [isSwitchingThread, setIsSwitchingThread] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -88,8 +95,13 @@ export function useEmbeddedTerminalController({
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [happyError, setHappyError] = useState<string | null>(null);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
-  const initialThemeRef = useRef(TERMINAL_THEMES[terminalTheme]);
-  const activeTheme = TERMINAL_THEMES[terminalTheme];
+  const themes = appSkin === "brutalism"
+    ? BRUTALISM_TERMINAL_THEMES
+    : appSkin === "cyberpunk"
+      ? CYBERPUNK_TERMINAL_THEMES
+      : TERMINAL_THEMES;
+  const initialThemeRef = useRef(themes[terminalTheme]);
+  const activeTheme = themes[terminalTheme];
   const threadId = thread?.id ?? null;
   const threadProviderId = thread?.providerId ?? null;
   const threadProfileName = thread?.profileName ?? null;
@@ -179,6 +191,33 @@ export function useEmbeddedTerminalController({
     setRefreshError(null);
     setHappyError(null);
   }, [launchTarget?.key]);
+
+  useEffect(() => {
+    if (launchTarget?.mode === "new") {
+      pendingNewLaunchBindingRef.current = {
+        sessionKey: launchTarget.key,
+        providerId: launchTarget.providerId,
+        profileName: launchTarget.profileName,
+        projectPath: launchTarget.projectPath,
+        launchEnvSignature: envSignature(launchTarget.launchEnv),
+        knownThreadKeys: new Set(launchTarget.knownThreadKeys),
+      };
+      return;
+    }
+
+    if (launchTarget?.mode === "resume") {
+      rebindPendingNewThreadSession({
+        launchTarget,
+        pendingBinding: pendingNewLaunchBindingRef.current,
+        activeSessionId: sessionIdRef.current,
+        launchEnvSignature: envSignature(launchTarget.launchEnv),
+        sessionsByThread: sessionsByThreadRef.current,
+        sessionsById: sessionsByIdRef.current,
+      });
+    }
+
+    pendingNewLaunchBindingRef.current = null;
+  }, [launchTarget]);
 
   const handleRefreshSession = useCallback(() => {
     if (isRefreshing || starting || isSwitchingThread) {
@@ -328,7 +367,8 @@ export function useEmbeddedTerminalController({
         if (
           session.providerId !== "codex" &&
           session.providerId !== "claude_code" &&
-          session.providerId !== "opencode"
+          session.providerId !== "opencode" &&
+          session.providerId !== "sophon"
         ) {
           void closeSessionById(session.sessionId);
           continue;
@@ -345,7 +385,9 @@ export function useEmbeddedTerminalController({
                 ? "get_claude_thread_runtime_state"
                 : providerId === "codex"
                   ? "get_codex_thread_runtime_state"
-                  : "get_opencode_thread_runtime_state";
+                  : providerId === "sophon"
+                    ? "get_sophon_thread_runtime_state"
+                    : "get_opencode_thread_runtime_state";
             const state = await invoke<ThreadRuntimeState>(command, {
               request: { threadId },
             });

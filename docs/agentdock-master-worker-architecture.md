@@ -73,9 +73,10 @@ Example tool payload:
 
 This proposal is compatible with current foundations, but not fully implemented:
 
-1. Shared contract alignment exists for three providers (`codex`, `claude_code`, `opencode`).
+1. Shared contract alignment exists for four providers (`codex`, `claude_code`, `opencode`, `sophon`).
 2. SQLite already exists as a central state foundation.
 3. Desktop terminal runtime can be used as execution substrate.
+4. Sophon now exists as the first-party local orchestration agent, although full autonomous worker execution is still incomplete.
 
 ## 5. Non-Implemented Parts
 

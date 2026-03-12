@@ -19,6 +19,7 @@ export interface McpDraftInput {
   argsJson: string;
   headersJson: string;
   envJson: string;
+  extraJson: string;
   scopeProviders: ThreadProviderId[];
   enabled: boolean;
   version: string;
@@ -58,16 +59,21 @@ function upsertServerLocal(current: McpServer[], nextServer: McpServer): McpServ
 }
 
 function isThreadProviderId(value: string): value is ThreadProviderId {
-  return value === "claude_code" || value === "codex" || value === "opencode";
+  return (
+    value === "claude_code" ||
+    value === "codex" ||
+    value === "opencode" ||
+    value === "sophon"
+  );
 }
 
 function resolveProviderIdsForSync(value: readonly string[] | undefined): ThreadProviderId[] {
   if (!value || value.length === 0) {
-    return ["claude_code", "codex", "opencode"];
+    return ["claude_code", "codex", "opencode", "sophon"];
   }
   const next = value.filter(isThreadProviderId);
   if (next.length === 0) {
-    return ["claude_code", "codex", "opencode"];
+    return ["claude_code", "codex", "opencode", "sophon"];
   }
   return Array.from(new Set(next));
 }
@@ -152,6 +158,7 @@ export function useMcpServers(): UseMcpServersResult {
             argsJson: draft.argsJson,
             headersJson: draft.headersJson,
             envJson: draft.envJson,
+            extraJson: draft.extraJson,
             scopeProviders: draft.scopeProviders,
             enabled: draft.enabled,
             version: draft.version,
@@ -255,6 +262,7 @@ export function useMcpServers(): UseMcpServersResult {
               argsJson: draft.argsJson,
               headersJson: draft.headersJson,
               envJson: draft.envJson,
+              extraJson: draft.extraJson,
               secretHeaderName: draft.secretHeaderName,
               secretToken: draft.secretToken,
             },

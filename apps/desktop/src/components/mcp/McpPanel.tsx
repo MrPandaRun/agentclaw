@@ -31,16 +31,34 @@ import { JsonCodeEditor } from "@/components/ui/json-code-editor";
 import { providerDisplayName } from "@/lib/provider";
 import { cn } from "@/lib/utils";
 
-const PROVIDERS: ThreadProviderId[] = ["claude_code", "codex", "opencode"];
+const PROVIDERS: ThreadProviderId[] = ["claude_code", "codex", "opencode", "sophon"];
 const CONFIG_ERROR_FIELDS = new Set([
   "transport",
   "target",
   "argsJson",
   "headersJson",
   "envJson",
+  "extraJson",
   "scopeProviders",
   "secretHeaderName",
   "version",
+]);
+
+const RESERVED_CONFIG_KEYS = new Set([
+  "type",
+  "transport",
+  "command",
+  "url",
+  "target",
+  "args",
+  "headers",
+  "http_headers",
+  "env",
+  "environment",
+  "scopeProviders",
+  "enabled",
+  "version",
+  "secretHeaderName",
 ]);
 
 interface McpConfigDocument {
@@ -58,10 +76,16 @@ interface McpConfigDocument {
   enabled?: unknown;
   version?: unknown;
   secretHeaderName?: unknown;
+  [key: string]: unknown;
 }
 
 function isThreadProviderId(value: string): value is ThreadProviderId {
-  return value === "claude_code" || value === "codex" || value === "opencode";
+  return (
+    value === "claude_code" ||
+    value === "codex" ||
+    value === "opencode" ||
+    value === "sophon"
+  );
 }
 
 function isTransport(value: string): value is McpTransport {
@@ -77,6 +101,7 @@ function createEmptyDraft(): McpDraftInput {
     argsJson: "[]",
     headersJson: "{}",
     envJson: "{}",
+    extraJson: "{}",
     scopeProviders: [...PROVIDERS],
     enabled: true,
     version: "1",
@@ -107,6 +132,7 @@ function mapServerToDraft(server: McpServer): McpDraftInput {
     argsJson: server.argsJson,
     headersJson: server.headersJson,
     envJson: server.envJson,
+    extraJson: server.extraJson,
     scopeProviders: parseProviderScope(server.scopeProviders),
     enabled: server.enabled,
     version: server.version || "1",
@@ -120,8 +146,10 @@ function toConfigJson(draft: McpDraftInput): string {
   const args = safeParseJsonArray(draft.argsJson);
   const headers = safeParseJsonObject(draft.headersJson);
   const env = safeParseJsonObject(draft.envJson);
-  const document: Record<string, unknown> =
-    draft.transport === "stdio"
+  const extra = safeParseJsonDocument(draft.extraJson);
+  const document: Record<string, unknown> = {
+    ...extra,
+    ...(draft.transport === "stdio"
       ? {
           type: "stdio",
           command: draft.target,
@@ -132,9 +160,26 @@ function toConfigJson(draft: McpDraftInput): string {
           type: draft.transport,
           url: draft.target,
           ...(Object.keys(headers).length > 0 ? { headers } : {}),
-        };
+        }),
+  };
 
   return JSON.stringify(document, null, 2);
+}
+
+function safeParseJsonDocument(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function toCompactObjectJson(value: Record<string, unknown>): string {
+  return JSON.stringify(value);
 }
 
 function safeParseJsonArray(raw: string): string[] {
@@ -336,6 +381,15 @@ function parseConfigJsonToDraft(
     }
     next.secretHeaderName = document.secretHeaderName;
   }
+
+  const extra: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(document)) {
+    if (RESERVED_CONFIG_KEYS.has(key)) {
+      continue;
+    }
+    extra[key] = value;
+  }
+  next.extraJson = toCompactObjectJson(extra);
 
   return next;
 }
@@ -1216,6 +1270,20 @@ export function McpPanel() {
                   </div>
                 </>
               )}
+
+              <label className="space-y-1">
+                <span className="text-[11px] text-muted-foreground">
+                  Extra JSON
+                </span>
+                <textarea
+                  value={wizardDraft.extraJson}
+                  onChange={(event) =>
+                    updateWizardField("extraJson", event.target.value)
+                  }
+                  placeholder='{"startup_timeout_sec": 30}'
+                  className="h-24 w-full rounded-md border border-input bg-background px-2 py-1.5 font-mono text-[11px] outline-none focus:border-primary"
+                />
+              </label>
 
               <div className="space-y-1">
                 <p className="text-[11px] text-muted-foreground">Providers</p>

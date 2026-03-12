@@ -84,6 +84,19 @@ export function useTerminalSessionLifecycle({
       lastHandledRefreshRequestRef.current = refreshRequestId;
     }
 
+    if (launchTarget && !forceRestart) {
+      const existing = sessionsByThreadRef.current.get(launchTarget.key);
+      if (existing && sessionIdRef.current === existing.sessionId) {
+        setLastCommand(existing.command);
+        queueRemoteResize(terminal.cols, terminal.rows);
+        cleanupDormantSessions(launchTarget.key);
+        setStarting(false);
+        setIsSwitchingThread(false);
+        fitAddonRef.current?.fit();
+        return;
+      }
+    }
+
     let cancelled = false;
 
     const startSession = async () => {

@@ -11,6 +11,7 @@ import { ProviderIcon } from "@/components/provider/ProviderIcon";
 import { providerAccentClass } from "@/lib/provider";
 import { threadKey } from "@/lib/thread";
 import { cn } from "@/lib/utils";
+import type { ThreadProviderId } from "@/types";
 
 import { ThreadListItem, type ThreadListThreadItem } from "./ThreadListItem";
 
@@ -19,8 +20,6 @@ export interface ThreadFolderGroupItem<T extends ThreadListThreadItem = ThreadLi
   folderName: string;
   threads: T[];
 }
-
-type ThreadProviderId = "claude_code" | "codex" | "opencode";
 
 interface ThreadFolderGroupProps<T extends ThreadListThreadItem> {
   group: ThreadFolderGroupItem<T>;
@@ -158,6 +157,17 @@ export function ThreadFolderGroup<T extends ThreadListThreadItem>({
                     className={cn("h-3.5 w-3.5", providerAccentClass("opencode"))}
                   />
                   OpenCode
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] hover:bg-accent"
+                  onClick={() => void handleCreate("sophon")}
+                >
+                  <ProviderIcon
+                    providerId="sophon"
+                    className={cn("h-3.5 w-3.5", providerAccentClass("sophon"))}
+                  />
+                  Sophon
                 </button>
               </div>
             ) : null}

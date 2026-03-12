@@ -23,6 +23,7 @@ provider-contract = { path = "../../../crates/provider-contract" }
 provider-claude = { path = "../../../crates/provider-claude" }
 provider-codex = { path = "../../../crates/provider-codex" }
 provider-opencode = { path = "../../../crates/provider-opencode" }
+provider-sophon = { path = "../../../crates/provider-sophon" }
 portable-pty = "0.8"
 chrono = { workspace = true }
 serde = { workspace = true }

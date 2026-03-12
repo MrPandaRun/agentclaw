@@ -32,6 +32,8 @@ pub struct SkillEnabledState {
     #[serde(default = "enabled_default_true")]
     pub opencode: bool,
     #[serde(default = "enabled_default_true")]
+    pub sophon: bool,
+    #[serde(default = "enabled_default_true")]
     pub antigravity: bool,
 }
 
@@ -47,6 +49,7 @@ impl SkillEnabledState {
             claude_code: true,
             codex: true,
             opencode: true,
+            sophon: true,
             antigravity: true,
         }
     }
@@ -56,6 +59,7 @@ impl SkillEnabledState {
             claude_code: false,
             codex: false,
             opencode: false,
+            sophon: false,
             antigravity: false,
         }
     }
@@ -65,6 +69,7 @@ impl SkillEnabledState {
             "claude_code" => self.claude_code,
             "codex" => self.codex,
             "opencode" => self.opencode,
+            "sophon" => self.sophon,
             "antigravity" => self.antigravity,
             _ => false,
         }
@@ -75,13 +80,14 @@ impl SkillEnabledState {
             "claude_code" => self.claude_code = enabled,
             "codex" => self.codex = enabled,
             "opencode" => self.opencode = enabled,
+            "sophon" => self.sophon = enabled,
             "antigravity" => self.antigravity = enabled,
             _ => {}
         }
     }
 
     pub fn is_any_enabled(&self) -> bool {
-        self.claude_code || self.codex || self.opencode || self.antigravity
+        self.claude_code || self.codex || self.opencode || self.sophon || self.antigravity
     }
 }
 
@@ -150,7 +156,7 @@ pub struct SkillRepo {
 pub fn list_skills(connection: &Connection) -> Result<Vec<Skill>, SkillError> {
     let mut stmt = connection.prepare(
         "SELECT id, name, COALESCE(description, ''), source, version,
-                COALESCE(enabled_json, '{\"claude_code\":true,\"codex\":true,\"opencode\":true,\"antigravity\":true}'),
+                COALESCE(enabled_json, '{\"claude_code\":true,\"codex\":true,\"opencode\":true,\"sophon\":true,\"antigravity\":true}'),
                 COALESCE(compatibility_json, '{}'),
                 COALESCE(readme_url, ''),
                 COALESCE(repo_owner, ''),
@@ -194,7 +200,7 @@ fn nullable_string_from_row(row: &rusqlite::Row, idx: usize) -> Option<String> {
 pub fn get_skill(connection: &Connection, id: &str) -> Result<Skill, SkillError> {
     let mut stmt = connection.prepare(
         "SELECT id, name, COALESCE(description, ''), source, version,
-                COALESCE(enabled_json, '{\"claude_code\":true,\"codex\":true,\"opencode\":true,\"antigravity\":true}'),
+                COALESCE(enabled_json, '{\"claude_code\":true,\"codex\":true,\"opencode\":true,\"sophon\":true,\"antigravity\":true}'),
                 COALESCE(compatibility_json, '{}'),
                 COALESCE(readme_url, ''),
                 COALESCE(repo_owner, ''),
@@ -753,6 +759,7 @@ mod tests {
         assert!(all.is_enabled_for("claude_code"));
         assert!(all.is_enabled_for("codex"));
         assert!(all.is_enabled_for("opencode"));
+        assert!(all.is_enabled_for("sophon"));
         assert!(all.is_enabled_for("antigravity"));
         assert!(all.is_any_enabled());
 

@@ -8,6 +8,8 @@ mod payloads;
 mod provider_health;
 mod provider_id;
 mod skills;
+mod sophon_account;
+mod sophon_install;
 mod terminal;
 mod threads;
 
@@ -24,10 +26,16 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_threads,
             commands::list_provider_install_statuses,
+            commands::get_sophon_workspace_path,
+            commands::install_sophon_cli,
+            commands::sync_sophon_account_settings,
+            commands::list_sophon_conductor_sessions,
+            commands::start_sophon_conductor_session,
             commands::import_ccswitch_suppliers,
             commands::get_claude_thread_runtime_state,
             commands::get_codex_thread_runtime_state,
             commands::get_opencode_thread_runtime_state,
+            commands::get_sophon_thread_runtime_state,
             commands::open_thread_in_terminal,
             commands::open_thread_in_happy,
             commands::is_happy_installed,
@@ -64,6 +72,9 @@ pub fn run() {
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
             fs::create_dir_all(&app_data_dir)?;
+            if let Err(error) = sophon_install::ensure_managed_sophon_binary(&app_data_dir) {
+                eprintln!("[SOPHON] Failed to prepare managed Sophon binary: {error}");
+            }
             let db_path = app_data_dir.join("agentdock.db");
             agentdock_core::db::init_db(&db_path)?;
             Ok(())

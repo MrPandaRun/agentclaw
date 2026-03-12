@@ -29,6 +29,7 @@ import {
   ThreadFolderGroup,
   type ThreadFolderGroupItem,
 } from "@/components/threads/ThreadFolderGroup";
+import { ThreadListItem } from "@/components/threads/ThreadListItem";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +40,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { JsonCodeEditor } from "@/components/ui/json-code-editor";
+import { Separator } from "@/components/ui/separator";
 import {
   isSupportedProvider,
   providerDisplayName,
@@ -47,13 +49,17 @@ import {
 import {
   normalizeProjectPath,
   formatLastActive,
+  threadKey,
   threadPreview,
 } from "@/lib/thread";
 import { cn } from "@/lib/utils";
 import type {
+  AgentThreadSummary,
   AgentRuntimeSettings,
+  AppWorkspaceMode,
   AgentSupplier,
   AppTheme,
+  AppSkin,
   ProviderInstallStatus,
   ProviderProfileMap,
   ThreadProviderId,
@@ -78,6 +84,12 @@ interface ProviderInstallStatusPayload {
   message?: string | null;
 }
 
+interface InstallSophonCliPayload {
+  installed: boolean;
+  binaryPath: string;
+  message?: string | null;
+}
+
 interface CcSwitchImportedSupplierPayload {
   providerId: string;
   sourceId: string;
@@ -98,7 +110,8 @@ interface CcSwitchImportPayload {
 type SupplierConfigProtocol =
   | "claude_env"
   | "codex_auth_config"
-  | "opencode_settings";
+  | "opencode_settings"
+  | "sophon_agent";
 
 interface SupplierPreset {
   id: string;
@@ -131,6 +144,18 @@ const APP_THEME_OPTIONS: AppThemeOption[] = [
   { value: "system", label: "System", Icon: Monitor },
 ];
 
+interface AppSkinOption {
+  value: AppSkin;
+  label: string;
+  description: string;
+}
+
+const APP_SKIN_OPTIONS: AppSkinOption[] = [
+  { value: "default", label: "Default", description: "Clean modern design" },
+  { value: "brutalism", label: "Brutalism", description: "Bold borders & shadows" },
+  { value: "cyberpunk", label: "Cyberpunk", description: "Neon glow & tech" },
+];
+
 const THREAD_PROVIDER_OPTIONS: ProviderOption[] = [
   {
     value: "claude_code",
@@ -146,6 +171,11 @@ const THREAD_PROVIDER_OPTIONS: ProviderOption[] = [
     value: "opencode",
     label: "OpenCode",
     accentClass: "text-[#211E1E] dark:text-[#F1ECEC]",
+  },
+  {
+    value: "sophon",
+    label: "Sophon",
+    accentClass: "text-[#17594A] dark:text-[#86E7CF]",
   },
 ];
 const OFFICIAL_SUPPLIER_ID = "official-default";
@@ -865,6 +895,82 @@ const SUPPLIER_PRESETS: Record<ThreadProviderId, SupplierPreset[]> = {
       ),
     },
   ],
+  sophon: [
+    {
+      id: "sophon-official-default",
+      providerId: "sophon",
+      label: "Official Sophon",
+      description: "Managed Sophon CLI with default local-first settings.",
+      name: "Official Sophon",
+      note: "Managed by AgentClaw",
+      profileName: "default",
+      docsUrl: "https://github.com/MrPandaRun/agentclaw",
+    },
+    {
+      id: "sophon-zai-glm",
+      providerId: "sophon",
+      label: "Z.ai GLM",
+      description: "Built-in Z.ai provider for Sophon with GLM defaults.",
+      name: "Z.ai GLM",
+      profileName: "zai-glm",
+      configProtocol: "sophon_agent",
+      docsUrl: "https://z.ai",
+      configJson: JSON.stringify(
+        {
+          settings: {
+            defaultProvider: "zai",
+            defaultModel: "glm-4.7",
+            defaultThinkingLevel: "medium",
+          },
+          auth: {
+            zai: {
+              type: "api_key",
+              key: "",
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    },
+    {
+      id: "sophon-zhipu-glm-cn",
+      providerId: "sophon",
+      label: "Zhipu GLM CN",
+      description: "Zhipu GLM via the mainland China endpoint with Sophon's built-in Z.ai provider.",
+      name: "Zhipu GLM CN",
+      profileName: "zhipu-glm-cn",
+      configProtocol: "sophon_agent",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+      docsUrl: "https://open.bigmodel.cn",
+      configJson: JSON.stringify(
+        {
+          settings: {
+            defaultProvider: "zai",
+            defaultModel: "glm-5",
+            defaultThinkingLevel: "medium",
+          },
+          auth: {
+            zai: {
+              type: "api_key",
+              key: "",
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    },
+    {
+      id: "sophon-custom-empty",
+      providerId: "sophon",
+      label: "Custom (Empty)",
+      description: "Manual Sophon configuration template.",
+      name: "Custom Sophon",
+      note: "Fill optional runtime config manually",
+      profileName: "default",
+    },
+  ],
 };
 
 const CODEX_MODEL_BY_PRESET_ID: Record<string, string> = {
@@ -1041,6 +1147,19 @@ const CONFIG_TEMPLATE: Record<ThreadProviderId, Record<string, unknown>> = {
     "https://api.openai.com/v1",
     "@ai-sdk/openai-compatible",
   ),
+  sophon: {
+    settings: {
+      defaultProvider: "zai",
+      defaultModel: "glm-4.7",
+      defaultThinkingLevel: "medium",
+    },
+    auth: {
+      zai: {
+        type: "api_key",
+        key: "",
+      },
+    },
+  },
 };
 
 function emptyProviderInstallStatusMap(): Record<
@@ -1051,6 +1170,7 @@ function emptyProviderInstallStatusMap(): Record<
     claude_code: null,
     codex: null,
     opencode: null,
+    sophon: null,
   };
 }
 
@@ -1203,6 +1323,9 @@ function configProtocolHint(providerId: ThreadProviderId): string {
   if (providerId === "opencode") {
     return "Config JSON (optional, preferred: `npm/options/models`)";
   }
+  if (providerId === "sophon") {
+    return "Config JSON (optional, preferred: `settings/auth/models`)";
+  }
   return "Config JSON (optional, preferred: `env` object)";
 }
 
@@ -1306,6 +1429,20 @@ function validateConfigJson(
       };
     }
 
+    if (providerId === "sophon") {
+      const settings = asJsonRecord(parsedRecord.settings);
+      const auth = asJsonRecord(parsedRecord.auth);
+      const models = asJsonRecord(parsedRecord.models);
+      const hasSophonShape =
+        settings !== null || auth !== null || models !== null;
+      return {
+        isValid: true,
+        message: hasSophonShape
+          ? "JSON is valid (Sophon agent protocol detected)."
+          : "JSON is valid. Recommended Sophon shape: { settings, auth, models }.",
+      };
+    }
+
     return {
       isValid: true,
       message: "JSON is valid. Recommended Claude shape: { env: { ... } }.",
@@ -1333,6 +1470,10 @@ function resolveProviderActiveProfile(
 export interface SidebarProps {
   sidebarCollapsed: boolean;
   folderGroups: ThreadFolderGroupItem[];
+  automaticThreads: AgentThreadSummary[];
+  workspaceMode: AppWorkspaceMode;
+  automaticWorkspacePath: string | null;
+  automaticWorkspacePathError: string | null;
   selectedFolderKey: string | null;
   selectedThreadKey: string | null;
   loadingThreads: boolean;
@@ -1341,6 +1482,7 @@ export interface SidebarProps {
   newThreadBindingStatus: "starting" | "awaiting_discovery" | null;
   hasPendingNewThreadLaunch: boolean;
   appTheme: AppTheme;
+  appSkin: AppSkin;
   activeProviderId: ThreadProviderId;
   activeProfileName: string;
   providerProfiles: ProviderProfileMap;
@@ -1351,16 +1493,23 @@ export interface SidebarProps {
     projectPath: string,
     providerId: ThreadProviderId,
   ) => Promise<void>;
+  onCreateAutomaticThread: () => Promise<void>;
+  onWorkspaceModeChange: (mode: AppWorkspaceMode) => void;
   onAgentRuntimeSettingsChange: (
     selection: AgentRuntimeSettings,
-  ) => string | null;
+  ) => Promise<string | null>;
   onAppThemeChange: (theme: AppTheme) => void;
+  onAppSkinChange: (skin: AppSkin) => void;
   onClearError: () => void;
 }
 
 export function Sidebar({
   sidebarCollapsed,
   folderGroups,
+  automaticThreads,
+  workspaceMode,
+  automaticWorkspacePath,
+  automaticWorkspacePathError,
   selectedFolderKey,
   selectedThreadKey,
   loadingThreads,
@@ -1369,6 +1518,7 @@ export function Sidebar({
   newThreadBindingStatus,
   hasPendingNewThreadLaunch,
   appTheme,
+  appSkin,
   activeProviderId,
   activeProfileName,
   providerProfiles,
@@ -1376,8 +1526,11 @@ export function Sidebar({
   onLoadThreads,
   onSelectThread,
   onCreateThread,
+  onCreateAutomaticThread,
+  onWorkspaceModeChange,
   onAgentRuntimeSettingsChange,
   onAppThemeChange,
+  onAppSkinChange,
   onClearError,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -1387,6 +1540,7 @@ export function Sidebar({
   const [mcpDialogOpen, setMcpDialogOpen] = useState(false);
   const [skillsDialogOpen, setSkillsDialogOpen] = useState(false);
   const [pendingTheme, setPendingTheme] = useState<AppTheme>(appTheme);
+  const [pendingSkin, setPendingSkin] = useState<AppSkin>(appSkin);
   const [pendingActiveProviderId, setPendingActiveProviderId] =
     useState<ThreadProviderId>(activeProviderId);
   const [pendingRuntimeSettings, setPendingRuntimeSettings] =
@@ -1426,6 +1580,8 @@ export function Sidebar({
   const [providerStatusError, setProviderStatusError] = useState<string | null>(
     null,
   );
+  const [providerInstallActionLoading, setProviderInstallActionLoading] =
+    useState(false);
   const [providerInstallGuideError, setProviderInstallGuideError] = useState<
     string | null
   >(null);
@@ -1461,6 +1617,8 @@ export function Sidebar({
       : newThreadBindingStatus === "awaiting_discovery"
         ? "Session started. Waiting for first input to persist thread id..."
         : null;
+  const automaticModeCreateDisabled =
+    isCreateBusy || automaticWorkspacePath === null || providerInstallActionLoading;
 
   const visibleCreateError =
     createDialogError ?? (didAttemptCreate ? error : null);
@@ -1506,16 +1664,24 @@ export function Sidebar({
     [],
   );
 
-  const handleOpenInstallGuide = useCallback(async () => {
+  const handleInstallProvider = useCallback(async () => {
     setProviderInstallGuideError(null);
+    setProviderInstallActionLoading(true);
     try {
+      if (selectedProviderId === "sophon") {
+        await invoke<InstallSophonCliPayload>("install_sophon_cli");
+        await loadProviderInstallStatuses(selectedProjectPath);
+        return;
+      }
       await openUrl(providerInstallGuideUrl(selectedProviderId));
     } catch (openError) {
       const message =
         openError instanceof Error ? openError.message : String(openError);
       setProviderInstallGuideError(message);
+    } finally {
+      setProviderInstallActionLoading(false);
     }
-  }, [selectedProviderId]);
+  }, [loadProviderInstallStatuses, selectedProjectPath, selectedProviderId]);
 
   useEffect(() => {
     if (
@@ -1597,8 +1763,9 @@ export function Sidebar({
   useEffect(() => {
     if (!themeDialogOpen) {
       setPendingTheme(appTheme);
+      setPendingSkin(appSkin);
     }
-  }, [appTheme, themeDialogOpen]);
+  }, [appTheme, appSkin, themeDialogOpen]);
 
   useEffect(() => {
     if (!accountDialogOpen) {
@@ -1685,9 +1852,6 @@ export function Sidebar({
   const selectedThemeOption = APP_THEME_OPTIONS.find(
     (option) => option.value === appTheme,
   );
-  const pendingThemeOption = APP_THEME_OPTIONS.find(
-    (option) => option.value === pendingTheme,
-  );
   const activeProviderOption = THREAD_PROVIDER_OPTIONS.find(
     (option) => option.value === activeProviderId,
   );
@@ -1715,6 +1879,18 @@ export function Sidebar({
       })
       .filter((g) => g !== null);
   }, [folderGroups, searchQuery]);
+  const filteredAutomaticThreads = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return automaticThreads;
+    }
+    const query = searchQuery.toLowerCase();
+    return automaticThreads.filter(
+      (thread) =>
+        thread.title.toLowerCase().includes(query) ||
+        (thread.lastMessagePreview &&
+          thread.lastMessagePreview.toLowerCase().includes(query)),
+    );
+  }, [automaticThreads, searchQuery]);
 
   const pendingActiveProviderOption = THREAD_PROVIDER_OPTIONS.find(
     (option) => option.value === pendingActiveProviderId,
@@ -1773,11 +1949,12 @@ export function Sidebar({
 
   const applyThemeChange = () => {
     onAppThemeChange(pendingTheme);
+    onAppSkinChange(pendingSkin);
     setThemeDialogOpen(false);
   };
 
-  const applyActiveAgentProfileChange = () => {
-    const message = onAgentRuntimeSettingsChange(pendingRuntimeSettings);
+  const applyActiveAgentProfileChange = async () => {
+    const message = await onAgentRuntimeSettingsChange(pendingRuntimeSettings);
     if (message) {
       setAccountDialogError(message);
       return;
@@ -1842,6 +2019,10 @@ export function Sidebar({
     );
     setPendingRuntimeSettings((current) => ({
       ...current,
+      activeSupplierIds: {
+        ...current.activeSupplierIds,
+        [pendingActiveProviderId]: presetSupplier.id,
+      },
       suppliersByProvider: {
         ...current.suppliersByProvider,
         [pendingActiveProviderId]: [
@@ -1853,7 +2034,7 @@ export function Sidebar({
     setEditingSupplierId(presetSupplier.id);
     setConfigEditorNotice({
       tone: "success",
-      message: `Preset "${selectedPreset.label}" added.`,
+      message: `Preset "${selectedPreset.label}" added and set active.`,
     });
     setAccountDialogError(null);
   };
@@ -2178,38 +2359,104 @@ export function Sidebar({
   return (
     <Card className="flex min-h-0 flex-col rounded-none border-0 bg-card/92 shadow-none pt-8">
       <CardHeader className="px-4 py-3 pb-2.5">
-        <div className="flex items-center gap-2 pt-1">
-          <Button
-            variant="default"
-            size="sm"
-            className="h-7 px-2.5 text-xs font-semibold shadow-sm hover:shadow"
-            onClick={openNewThreadDialog}
-            disabled={isCreateBusy}
-            aria-label="Create a new thread"
-          >
-            {isCreateBusy ? (
-              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-            ) : (
-              <Plus className="mr-1.5 h-3 w-3" />
-            )}
-            {isCreateBusy ? "Creating..." : "New Thread"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 w-7 px-0"
-            onClick={() => void onLoadThreads()}
-            disabled={loadingThreads}
-            title="Refresh"
-            aria-label="Refresh threads"
-          >
-            <RefreshCw
+        <div className="space-y-2 pt-1">
+          <div className="inline-flex w-full rounded-xl border border-border/80 bg-muted/35 p-1">
+            <button
+              type="button"
               className={cn(
-                "h-3.5 w-3.5",
-                loadingThreads ? "animate-spin" : "",
+                "flex-1 rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors",
+                workspaceMode === "manual"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
               )}
-            />
-          </Button>
+              onClick={() => onWorkspaceModeChange("manual")}
+            >
+              Manual
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "flex-1 rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors",
+                workspaceMode === "automatic"
+                  ? "bg-[#17594A]/12 text-[#17594A] shadow-sm dark:bg-[#86E7CF]/12 dark:text-[#86E7CF]"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => onWorkspaceModeChange("automatic")}
+            >
+              Auto
+            </button>
+          </div>
+
+          <div className="rounded-xl border border-border/70 bg-card/70 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {workspaceMode === "automatic" ? "Automatic Mode" : "Manual Mode"}
+            </p>
+            <p className="mt-1 text-[12px] text-foreground/90">
+              {workspaceMode === "automatic"
+                ? "Drive Sophon from ~/.sophon/workspace with a dedicated thread list."
+                : "Browse all agent threads grouped by project folder."}
+            </p>
+            {workspaceMode === "automatic" ? (
+              <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                Workspace: {automaticWorkspacePath ?? "~/.sophon/workspace"}
+              </p>
+            ) : null}
+            {workspaceMode === "automatic" && automaticWorkspacePathError ? (
+              <p className="mt-1 text-[11px] text-destructive">
+                {automaticWorkspacePathError}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 px-2.5 text-xs font-semibold shadow-sm hover:shadow"
+              onClick={
+                workspaceMode === "automatic"
+                  ? () => void onCreateAutomaticThread()
+                  : openNewThreadDialog
+              }
+              disabled={
+                workspaceMode === "automatic" ? automaticModeCreateDisabled : isCreateBusy
+              }
+              aria-label={
+                workspaceMode === "automatic"
+                  ? "Create a new Sophon workspace thread"
+                  : "Create a new thread"
+              }
+            >
+              {isCreateBusy ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : (
+                <Plus className="mr-1.5 h-3 w-3" />
+              )}
+              {workspaceMode === "automatic"
+                ? isCreateBusy
+                  ? "Creating..."
+                  : "New Sophon"
+                : isCreateBusy
+                  ? "Creating..."
+                  : "New Thread"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 px-0"
+              onClick={() => void onLoadThreads()}
+              disabled={loadingThreads}
+              title="Refresh"
+              aria-label="Refresh threads"
+            >
+              <RefreshCw
+                className={cn(
+                  "h-3.5 w-3.5",
+                  loadingThreads ? "animate-spin" : "",
+                )}
+              />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden py-2.5 pl-2.5 pr-2.5">
@@ -2218,7 +2465,9 @@ export function Sidebar({
             <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-[45%] text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search..."
+              placeholder={
+                workspaceMode === "automatic" ? "Search Sophon threads..." : "Search projects..."
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-7 w-full rounded border border-input bg-transparent px-7 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -2226,25 +2475,21 @@ export function Sidebar({
           </div>
           <div className="mb-1.5 flex items-center justify-between px-0.5 pr-2.5">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Projects
+              {workspaceMode === "automatic" ? "Sophon Threads" : "Projects"}
             </p>
             <Badge variant="secondary" className="h-5 px-2 text-[10px]">
-              {filteredFolderGroups.reduce(
-                (acc, g) => acc + g.threads.length,
-                0,
-              )}
+              {workspaceMode === "automatic"
+                ? filteredAutomaticThreads.length
+                : filteredFolderGroups.reduce(
+                    (acc, g) => acc + g.threads.length,
+                    0,
+                  )}
             </Badge>
           </div>
 
           {loadingThreads ? (
             <p className="px-1.5 py-2 text-xs text-muted-foreground">
               Loading threads...
-            </p>
-          ) : filteredFolderGroups.length === 0 ? (
-            <p className="px-1.5 py-2 text-xs text-muted-foreground">
-              No sessions found in <code>~/.claude/projects</code>,{" "}
-              <code>~/.codex/sessions</code>, or{" "}
-              <code>~/.local/share/opencode/storage/session</code>.
             </p>
           ) : (
             <div className="min-h-0 flex-1 overflow-hidden">
@@ -2265,21 +2510,48 @@ export function Sidebar({
                 }
               `}</style>
               <div className="sidebar-scroll h-full overflow-y-auto pr-2.5">
-                <ul className="w-full space-y-2 pb-1.5">
-                  {filteredFolderGroups.map((group) => (
-                    <ThreadFolderGroup
-                      key={group.key}
-                      group={group}
-                      isActiveFolder={group.key === selectedFolderKey}
-                      selectedThreadKey={selectedThreadKey}
-                      onSelectThread={onSelectThread}
-                      onCreateThread={onCreateThread}
-                      isCreatingThread={creatingThreadFolderKey === group.key}
-                      formatLastActive={formatLastActive}
-                      getPreview={threadPreview}
-                    />
-                  ))}
-                </ul>
+                {workspaceMode === "automatic" ? (
+                  filteredAutomaticThreads.length === 0 ? (
+                    <p className="px-1.5 py-2 text-xs text-muted-foreground">
+                      No Sophon threads found in <code>~/.sophon/workspace</code>.
+                    </p>
+                  ) : (
+                    <ul className="w-full space-y-1 pb-1.5">
+                      {filteredAutomaticThreads.map((thread) => (
+                        <ThreadListItem
+                          key={threadKey(thread)}
+                          thread={thread}
+                          isActive={threadKey(thread) === selectedThreadKey}
+                          onSelectThread={onSelectThread}
+                          formatLastActive={formatLastActive}
+                          getPreview={threadPreview}
+                        />
+                      ))}
+                    </ul>
+                  )
+                ) : filteredFolderGroups.length === 0 ? (
+                  <p className="px-1.5 py-2 text-xs text-muted-foreground">
+                    No sessions found in <code>~/.claude/projects</code>,{" "}
+                    <code>~/.codex/sessions</code>, or{" "}
+                    <code>~/.local/share/opencode/storage/session</code>.
+                  </p>
+                ) : (
+                  <ul className="w-full space-y-2 pb-1.5">
+                    {filteredFolderGroups.map((group) => (
+                      <ThreadFolderGroup
+                        key={group.key}
+                        group={group}
+                        isActiveFolder={group.key === selectedFolderKey}
+                        selectedThreadKey={selectedThreadKey}
+                        onSelectThread={onSelectThread}
+                        onCreateThread={onCreateThread}
+                        isCreatingThread={creatingThreadFolderKey === group.key}
+                        formatLastActive={formatLastActive}
+                        getPreview={threadPreview}
+                      />
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           )}
@@ -2583,11 +2855,15 @@ export function Sidebar({
                       variant="outline"
                       size="sm"
                       className="h-7 px-2 text-[11px]"
-                      onClick={() => void handleOpenInstallGuide()}
-                      disabled={isCreateBusy}
+                      onClick={() => void handleInstallProvider()}
+                      disabled={isCreateBusy || providerInstallActionLoading}
                     >
-                      Install {providerDisplayName(selectedProviderId)}
-                      <ExternalLink className="ml-1.5 h-3 w-3" />
+                      {providerInstallActionLoading
+                        ? `Installing ${providerDisplayName(selectedProviderId)}...`
+                        : `Install ${providerDisplayName(selectedProviderId)}`}
+                      {selectedProviderId === "sophon" ? null : (
+                        <ExternalLink className="ml-1.5 h-3 w-3" />
+                      )}
                     </Button>
                   </div>
                 ) : null}
@@ -2602,7 +2878,7 @@ export function Sidebar({
 
                 {providerInstallGuideError ? (
                   <p className="text-[11px] text-destructive">
-                    Failed to open install guide: {providerInstallGuideError}
+                    Provider install action failed: {providerInstallGuideError}
                   </p>
                 ) : null}
 
@@ -3122,6 +3398,14 @@ export function Sidebar({
                 </code>
               </div>
 
+              {pendingActiveProviderId === "sophon" ? (
+                <p className="rounded border border-[#17594A]/20 bg-[#17594A]/6 px-2 py-1.5 text-[11px] text-[#17594A] dark:border-[#86E7CF]/20 dark:bg-[#86E7CF]/8 dark:text-[#86E7CF]">
+                  Apply will sync the active Sophon supplier into{" "}
+                  <code>~/.sophon/agent/settings.json</code>,{" "}
+                  <code>auth.json</code>, and <code>models.json</code>.
+                </p>
+              ) : null}
+
               {accountDialogError ? (
                 <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
                   {accountDialogError}
@@ -3143,7 +3427,7 @@ export function Sidebar({
                   variant="secondary"
                   size="sm"
                   className="h-8 px-3 text-xs"
-                  onClick={applyActiveAgentProfileChange}
+                  onClick={() => void applyActiveAgentProfileChange()}
                 >
                   Apply
                 </Button>
@@ -3163,30 +3447,55 @@ export function Sidebar({
             onClick={(event) => event.stopPropagation()}
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">App Theme</CardTitle>
+              <CardTitle className="text-base">Appearance</CardTitle>
               <CardDescription className="text-xs">
-                Choose the appearance for the entire desktop app.
+                Choose the theme and skin for the desktop app.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {APP_THEME_OPTIONS.map(({ value, label, Icon }) => (
-                <Button
-                  key={value}
-                  type="button"
-                  variant={pendingTheme === value ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-9 w-full items-center justify-between px-2.5 text-xs"
-                  onClick={() => setPendingTheme(value)}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </span>
-                  {pendingTheme === value ? (
-                    <Check className="h-3.5 w-3.5" />
-                  ) : null}
-                </Button>
-              ))}
+            <CardContent className="space-y-3">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Theme</p>
+                {APP_THEME_OPTIONS.map(({ value, label, Icon }) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={pendingTheme === value ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-9 w-full items-center justify-between px-2.5 text-xs"
+                    onClick={() => setPendingTheme(value)}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                    </span>
+                    {pendingTheme === value ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : null}
+                  </Button>
+                ))}
+              </div>
+              <Separator />
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Skin</p>
+                {APP_SKIN_OPTIONS.map(({ value, label, description }) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={pendingSkin === value ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-auto w-full items-center justify-between px-2.5 py-2 text-xs"
+                    onClick={() => setPendingSkin(value)}
+                  >
+                    <span className="flex flex-col items-start gap-0.5 text-left">
+                      <span>{label}</span>
+                      <span className="text-[10px] text-muted-foreground">{description}</span>
+                    </span>
+                    {pendingSkin === value ? (
+                      <Check className="h-3.5 w-3.5 shrink-0" />
+                    ) : null}
+                  </Button>
+                ))}
+              </div>
               <div className="flex items-center justify-end gap-2 pt-1">
                 <Button
                   type="button"
@@ -3207,9 +3516,6 @@ export function Sidebar({
                   Apply
                 </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Current: {pendingThemeOption?.label ?? "Light"}
-              </p>
             </CardContent>
           </Card>
         </div>

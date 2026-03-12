@@ -98,4 +98,29 @@ export const TERMINAL_PROVIDER_HELP_DOCS: Record<ThreadProviderId, TerminalProvi
     detailedDocsLabel: "OpenCode docs",
     detailedDocsHref: "https://opencode.ai/docs",
   },
+  sophon: {
+    modeNote:
+      "Runs Sophon CLI directly in AgentClaw Terminal and can bridge ordinary agent work with conductor-style orchestration flows.",
+    quickStartSteps: [
+      "Select a Sophon thread or start a new Sophon session from the project folder.",
+      "Type your instruction and press Enter to submit. Use Shift+Enter for multiline prompts.",
+      "If the managed Sophon binary changed or state looks stale, use Refresh to relaunch against the current workspace.",
+    ],
+    internalModesNote:
+      "Sophon can expose conductor-oriented coordination flows in addition to direct thread execution, depending on the active workspace session.",
+    internalModeSteps: [
+      `Use ${AGENT_MODE_SWITCH_SHORTCUT_LABEL} when Sophon exposes a mode or workspace switcher.`,
+      "Use `/` to inspect Sophon slash commands and conductor controls when supported.",
+      "Keep working in the same Sophon thread when you want the agent to retain orchestration context.",
+    ],
+    modelShortcutNote:
+      `Use ${AGENT_MODE_SWITCH_SHORTCUT_LABEL} when available. Otherwise use Sophon CLI commands to change mode, workspace, or active coordination flow.`,
+    troubleshootingSteps: [
+      "CLI unavailable: verify Sophon is installed or let AgentClaw install the managed binary.",
+      "Workspace errors: confirm `~/.sophon/workspace` is accessible and the target project path still exists.",
+      "Unexpected thread state: refresh the terminal session to reload current Sophon runtime metadata.",
+    ],
+    detailedDocsLabel: "Sophon setup",
+    detailedDocsHref: "https://github.com/MrPandaRun/agentclaw",
+  },
 };

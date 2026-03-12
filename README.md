@@ -1,10 +1,10 @@
 # AgentClaw
 
-Local-first control plane for coding agents across `codex`, `claude_code`, and `opencode`.
+Local-first control plane for coding agents across `codex`, `claude_code`, `opencode`, and `sophon`.
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-AgentClaw helps you inspect and resume agent-native threads from one desktop workspace without replacing upstream CLIs.
+AgentClaw helps you inspect and resume agent-native threads from one desktop workspace without replacing upstream CLIs. `Sophon` is the first-party orchestration agent in this repo, and it can run as a standalone CLI or inside the desktop app's automatic workspace mode.
 
 ## Why AgentClaw
 
@@ -17,27 +17,34 @@ AgentClaw helps you inspect and resume agent-native threads from one desktop wor
 
 - Project: folder-level grouping in the left sidebar.
 - Thread: one interaction unit shown in UI.
-- Agent: primary execution carrier (`codex` / `claude_code` / `opencode`).
+- Agent: primary execution carrier (`codex` / `claude_code` / `opencode` / `sophon`).
 - Model Provider: model vendor used by an agent run (for example OpenAI, Anthropic, OpenRouter).
+- Conductor: internal term for Sophon's orchestration role when it coordinates other agents inside `~/.sophon/workspace`.
 
 ## Feature Snapshot
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Agent scope (`codex`, `claude_code`, `opencode`) | Now | Reflected in TS and Rust contracts (as Provider IDs). |
+| Agent scope (`codex`, `claude_code`, `opencode`, `sophon`) | Now | Reflected in TS and Rust contracts (as Provider IDs). |
 | Local-first desktop runtime (Tauri + React) | Now | Rust host + React/Vite UI. |
-| Unified thread listing + resume | Now | Three adapters expose thread scan + resume command path. |
+| Unified thread listing + resume | Now | Four adapters expose thread scan + resume command path. |
 | Desktop execution mode | Now | Terminal-only (embedded PTY + terminal launch). |
-| Cross-agent summary orchestration | Planned | Not part of current `ProviderAdapter` contract surface. |
+| Global workspace modes | Now | Manual mode keeps folder-grouped threads; automatic mode focuses on Sophon workspace threads. |
+| Sophon first-party CLI | MVP | Local session storage, skills discovery, workspace conductor sessions, and stable JSON commands are implemented. |
+| Automated cross-agent worker execution | In Progress | Sophon currently tracks coordination state and linked threads; full worker execution scheduling is not complete yet. |
 | Mobile remote-control workflows | Planned | Expo shell exists; full remote-control loop is not complete. |
 
 ## Desktop Behavior (Current)
 
-- Sidebar groups threads by project folder.
+- Global mode switch:
+  - Manual mode keeps the original folder-grouped thread list on the left and the integrated terminal on the right.
+  - Automatic mode switches the left side to Sophon threads under `~/.sophon/workspace` and still uses the integrated terminal on the right.
+- Sidebar groups threads by project folder in manual mode.
 - Thread records include `title` and optional `lastMessagePreview`.
 - Sidebar item text prefers `title`; if empty, it falls back to `lastMessagePreview`.
 - Header title displays selected thread `title`.
 - Create New Thread dialog checks per-agent installation status and shows install guidance when a CLI is missing.
+- When Sophon is missing, desktop can install a managed Sophon binary and then use that absolute binary path for new/resumed terminal sessions.
 - Settings include active Agent and per-agent supplier switching (official default + third-party), with per-supplier profile and optional config JSON/env overrides applied on terminal launch.
 - Thread title strategy in adapters prioritizes agent-official titles, then user-input fallback.
 
@@ -66,6 +73,7 @@ bun run dev
   - `codex`
   - `claude` (for `claude_code`)
   - `opencode`
+- For development builds, Sophon can be built into a managed binary from `packages/sophon-cli` via Bun. End users do not need a global `sophon` binary if desktop installation succeeds.
 
 Optional environment overrides:
 
@@ -76,6 +84,8 @@ Optional environment overrides:
 | `AGENTDOCK_CLAUDE_BIN` | Override Claude CLI binary name/path. |
 | `AGENTDOCK_OPENCODE_DATA_DIR` | Override OpenCode data directory root. |
 | `AGENTDOCK_OPENCODE_BIN` | Override OpenCode CLI binary name/path. |
+| `AGENTDOCK_SOPHON_BIN` | Override Sophon CLI binary name/path used by desktop and Rust adapter. |
+| `SOPHON_HOME` | Override Sophon home directory root (default: `~/.sophon`). |
 
 ## Development Commands
 
@@ -102,7 +112,7 @@ cargo test -p provider-codex -- list_threads_reads_codex_sessions
 Provider IDs are fixed to:
 
 ```ts
-type ProviderId = "codex" | "claude_code" | "opencode";
+type ProviderId = "codex" | "claude_code" | "opencode" | "sophon";
 ```
 
 Shared provider contract files:
@@ -114,9 +124,16 @@ Shared provider contract files:
 - `list_threads`
 - `resume_thread`
 
+Sophon-specific command contracts used by desktop live behind the `sophon` CLI, for example:
+- `sophon health --json`
+- `sophon threads list --json`
+- `sophon threads runtime --thread-id <id> --json`
+- `sophon conductor sessions list --json`
+
 ## Documentation Map
 
 - Current implementation summary: [`docs/agentdock-current-product-summary.md`](./docs/agentdock-current-product-summary.md)
+- Sophon agent and workspace modes: [`docs/sophon.md`](./docs/sophon.md)
 - Current Phase 1 execution spec: [`docs/agentdock-phase1-prd.md`](./docs/agentdock-phase1-prd.md)
 - Historical planning docs with errata:
   - [`Project-AgentDock.md`](./Project-AgentDock.md)

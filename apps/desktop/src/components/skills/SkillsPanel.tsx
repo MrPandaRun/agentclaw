@@ -45,6 +45,7 @@ const PROVIDERS = [
   { id: "codex", label: "Codex" },
   { id: "antigravity", label: "Antigravity" },
   { id: "opencode", label: "OpenCode" },
+  { id: "sophon", label: "Sophon" },
 ] as const;
 
 type TabType = "installed" | "discover";

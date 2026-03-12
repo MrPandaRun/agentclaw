@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { AgentThreadSummary } from "@/types";
 
 import {
+  isAutomaticModeThread,
   pickCreatedThread,
   resolveSelectedThreadKey,
   threadKey,
@@ -77,5 +78,31 @@ describe("pickCreatedThread", () => {
     expect(created).not.toBeNull();
     expect(created?.providerId).toBe("codex");
     expect(created?.id).toBe("same-id");
+  });
+});
+
+describe("isAutomaticModeThread", () => {
+  test("matches sophon threads rooted in ~/.sophon/workspace", () => {
+    expect(
+      isAutomaticModeThread(
+        buildThread({
+          providerId: "sophon",
+          id: "auto-thread",
+          projectPath: "/Users/demo/.sophon/workspace",
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  test("ignores non-sophon threads even if path matches", () => {
+    expect(
+      isAutomaticModeThread(
+        buildThread({
+          providerId: "codex",
+          id: "manual-thread",
+          projectPath: "/Users/demo/.sophon/workspace",
+        }),
+      ),
+    ).toBe(false);
   });
 });

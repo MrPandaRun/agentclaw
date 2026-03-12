@@ -26,33 +26,44 @@ import {
   updateProjectOpenUsage,
 } from "@/lib/developerActions";
 import { isSupportedProvider, providerDisplayName } from "@/lib/provider";
-import { threadKey } from "@/lib/thread";
+import { isAutomaticModeThread, resolveSelectedThreadKey, threadKey } from "@/lib/thread";
 import { cn } from "@/lib/utils";
 import type {
   AgentRuntimeSettings,
   AgentSupplier,
+  AppWorkspaceMode,
   AppTheme,
+  AppSkin,
   OpenTargetId,
   OpenTargetStatus,
   ProjectGitBranchInfo,
   ProviderProfileMap,
+  SyncSophonAccountResult,
   TerminalTheme,
   ThreadProviderId,
 } from "@/types";
 
 const APP_THEME_KEY = "agentdock.desktop.app_theme";
+const APP_SKIN_KEY = "agentdock.desktop.app_skin";
 const AGENT_RUNTIME_SETTINGS_KEY = "agentdock.desktop.agent_runtime_settings";
+const APP_WORKSPACE_MODE_KEY = "agentdock.desktop.workspace_mode";
 const LEGACY_AGENT_PROFILE_SETTINGS_KEY = "agentdock.desktop.agent_profile_settings";
 const LEGACY_ACTIVE_PROVIDER_KEY = "agentdock.desktop.active_provider";
 const LEGACY_ACTIVE_PROFILE_KEY = "agentdock.desktop.active_profile";
 const OFFICIAL_SUPPLIER_ID = "official-default";
-const PROVIDER_IDS: ThreadProviderId[] = ["claude_code", "codex", "opencode"];
+const PROVIDER_IDS: ThreadProviderId[] = ["claude_code", "codex", "opencode", "sophon"];
 const GIT_BRANCH_POLL_INTERVAL_MS = 8_000;
 
 interface OpenProjectWithTargetResponse {
   launched: boolean;
   targetId: string;
   command: string;
+}
+
+interface SyncSophonAccountRequest {
+  baseUrl?: string | null;
+  apiKey?: string | null;
+  configJson?: string | null;
 }
 
 function readStoredDefaultOpenTarget(): OpenTargetId {
@@ -88,6 +99,22 @@ function readStoredAppTheme(): AppTheme {
   }
   const raw = window.localStorage.getItem(APP_THEME_KEY);
   return raw === "dark" || raw === "system" ? raw : "light";
+}
+
+function readStoredAppSkin(): AppSkin {
+  if (typeof window === "undefined") {
+    return "default";
+  }
+  const raw = window.localStorage.getItem(APP_SKIN_KEY);
+  return raw === "brutalism" ? "brutalism" : "default";
+}
+
+function readStoredWorkspaceMode(): AppWorkspaceMode {
+  if (typeof window === "undefined") {
+    return "manual";
+  }
+  const raw = window.localStorage.getItem(APP_WORKSPACE_MODE_KEY);
+  return raw === "automatic" ? "automatic" : "manual";
 }
 
 function readSystemTheme(): TerminalTheme {
@@ -129,11 +156,13 @@ function defaultAgentRuntimeSettings(): AgentRuntimeSettings {
       claude_code: OFFICIAL_SUPPLIER_ID,
       codex: OFFICIAL_SUPPLIER_ID,
       opencode: OFFICIAL_SUPPLIER_ID,
+      sophon: OFFICIAL_SUPPLIER_ID,
     },
     suppliersByProvider: {
       claude_code: [createOfficialSupplier("claude_code")],
       codex: [createOfficialSupplier("codex")],
       opencode: [createOfficialSupplier("opencode")],
+      sophon: [createOfficialSupplier("sophon")],
     },
   };
 }
@@ -152,11 +181,13 @@ function normalizeAgentRuntimeSettings(input: AgentRuntimeSettings): AgentRuntim
       claude_code: OFFICIAL_SUPPLIER_ID,
       codex: OFFICIAL_SUPPLIER_ID,
       opencode: OFFICIAL_SUPPLIER_ID,
+      sophon: OFFICIAL_SUPPLIER_ID,
     },
     suppliersByProvider: {
       claude_code: [],
       codex: [],
       opencode: [],
+      sophon: [],
     },
   };
 
@@ -305,11 +336,41 @@ function resolveActiveSupplier(
   );
 }
 
+function supplierSignature(supplier: AgentSupplier): string {
+  return JSON.stringify({
+    id: supplier.id,
+    profileName: normalizeProfileName(supplier.profileName),
+    baseUrl: normalizeOptionalText(supplier.baseUrl) ?? null,
+    apiKey: normalizeOptionalText(supplier.apiKey) ?? null,
+    configJson: normalizeOptionalText(supplier.configJson) ?? null,
+  });
+}
+
+function hasSophonSupplierChanged(
+  current: AgentRuntimeSettings,
+  next: AgentRuntimeSettings,
+): boolean {
+  return (
+    supplierSignature(resolveActiveSupplier(current, "sophon")) !==
+    supplierSignature(resolveActiveSupplier(next, "sophon"))
+  );
+}
+
+function buildSophonSyncRequest(settings: AgentRuntimeSettings): SyncSophonAccountRequest {
+  const supplier = resolveActiveSupplier(settings, "sophon");
+  return {
+    baseUrl: normalizeOptionalText(supplier.baseUrl) ?? null,
+    apiKey: normalizeOptionalText(supplier.apiKey) ?? null,
+    configJson: normalizeOptionalText(supplier.configJson) ?? null,
+  };
+}
+
 function deriveProviderProfiles(settings: AgentRuntimeSettings): ProviderProfileMap {
   return {
     claude_code: resolveActiveSupplier(settings, "claude_code").profileName,
     codex: resolveActiveSupplier(settings, "codex").profileName,
     opencode: resolveActiveSupplier(settings, "opencode").profileName,
+    sophon: resolveActiveSupplier(settings, "sophon").profileName,
   };
 }
 
@@ -483,6 +544,10 @@ function extractEnvFromConfigJson(
     };
   }
 
+  if (providerId === "sophon") {
+    return envOverrides;
+  }
+
   const opencodeConfig = asRecord(parsed.settingsConfig) ?? parsed;
   const opencodeOptions = asRecord(opencodeConfig.options);
   const apiKey = firstNonEmptyString([
@@ -517,6 +582,20 @@ function extractEnvFromConfigJson(
   };
 }
 
+function extractSophonDefaultProvider(configJson?: string): string | undefined {
+  const parsed = parseConfigJsonObject(configJson);
+  const settings = asRecord(parsed?.settings);
+  return normalizeOptionalText(
+    typeof settings?.defaultProvider === "string"
+      ? settings.defaultProvider
+      : typeof parsed?.defaultProvider === "string"
+        ? parsed.defaultProvider
+        : typeof parsed?.provider === "string"
+          ? parsed.provider
+          : undefined,
+  );
+}
+
 function providerCredentialEnv(
   providerId: ThreadProviderId,
   supplier: AgentSupplier,
@@ -542,6 +621,40 @@ function providerCredentialEnv(
     if (baseUrl) {
       env.OPENAI_BASE_URL = baseUrl;
     }
+    return env;
+  }
+
+  if (providerId === "sophon") {
+    const defaultProvider = extractSophonDefaultProvider(supplier.configJson);
+    if (!apiKey || !defaultProvider) {
+      return env;
+    }
+
+    if (defaultProvider === "zai") {
+      env.ZAI_API_KEY = apiKey;
+      return env;
+    }
+    if (defaultProvider === "openai") {
+      env.OPENAI_API_KEY = apiKey;
+      return env;
+    }
+    if (defaultProvider === "anthropic") {
+      env.ANTHROPIC_API_KEY = apiKey;
+      return env;
+    }
+    if (defaultProvider === "google") {
+      env.GOOGLE_GENERATIVE_AI_API_KEY = apiKey;
+      return env;
+    }
+    if (defaultProvider === "xai") {
+      env.XAI_API_KEY = apiKey;
+      return env;
+    }
+    if (defaultProvider === "openrouter") {
+      env.OPENROUTER_API_KEY = apiKey;
+      return env;
+    }
+
     return env;
   }
 
@@ -616,6 +729,8 @@ function validateAgentRuntimeSettings(settings: AgentRuntimeSettings): string | 
 
 function App() {
   const [appTheme, setAppTheme] = useState<AppTheme>(readStoredAppTheme);
+  const [appSkin, setAppSkin] = useState<AppSkin>(readStoredAppSkin);
+  const [workspaceMode, setWorkspaceMode] = useState<AppWorkspaceMode>(readStoredWorkspaceMode);
   const [agentRuntimeSettings, setAgentRuntimeSettings] = useState<AgentRuntimeSettings>(
     readStoredAgentRuntimeSettings,
   );
@@ -640,6 +755,7 @@ function App() {
   } = useSidebar();
 
   const {
+    threads,
     selectedThreadKey,
     selectedThread,
     folderGroups,
@@ -671,10 +787,26 @@ function App() {
   const [projectOpenUsage, setProjectOpenUsage] = useState(readStoredProjectOpenUsage);
   const [gitBranchInfo, setGitBranchInfo] = useState<ProjectGitBranchInfo | null>(null);
   const [gitBranchLoading, setGitBranchLoading] = useState(false);
+  const [sophonWorkspacePath, setSophonWorkspacePath] = useState<string | null>(null);
+  const [sophonWorkspacePathError, setSophonWorkspacePathError] = useState<string | null>(null);
+  const automaticModeThreads = useMemo(
+    () => threads.filter((thread) => isAutomaticModeThread(thread)),
+    [threads],
+  );
+  const visibleSelectedThread = useMemo(() => {
+    if (workspaceMode === "manual") {
+      return selectedThread;
+    }
+    return automaticModeThreads.find((thread) => threadKey(thread) === selectedThreadKey) ?? null;
+  }, [automaticModeThreads, selectedThread, selectedThreadKey, workspaceMode]);
+  const automaticModeWorkspacePath =
+    sophonWorkspacePath ?? automaticModeThreads[0]?.projectPath ?? null;
 
   const activeHeaderProjectPath = newThreadLaunch
     ? newThreadLaunch.projectPath
-    : (selectedThread?.projectPath ?? null);
+    : workspaceMode === "automatic"
+      ? (visibleSelectedThread?.projectPath ?? automaticModeWorkspacePath)
+      : (visibleSelectedThread?.projectPath ?? null);
   const normalizedActiveProjectPath = useMemo(() => {
     const trimmed = activeHeaderProjectPath?.trim();
     if (!trimmed || trimmed === "-") {
@@ -684,21 +816,26 @@ function App() {
   }, [activeHeaderProjectPath]);
 
   const selectedThreadStorageKey = useMemo(() => {
-    if (!selectedThread) {
+    if (!visibleSelectedThread) {
       return null;
     }
-    return threadKey(selectedThread);
-  }, [selectedThread]);
+    return threadKey(visibleSelectedThread);
+  }, [visibleSelectedThread]);
+  const visibleSelectedThreadKey = useMemo(() => {
+    if (!visibleSelectedThread) {
+      return null;
+    }
+    return threadKey(visibleSelectedThread);
+  }, [visibleSelectedThread]);
 
-  const ideContextToggleDisabled =
-    !selectedThreadStorageKey || newThreadLaunch !== null;
+  const ideContextToggleDisabled = !selectedThreadStorageKey || newThreadLaunch !== null;
   const ideContextEnabled =
     !ideContextToggleDisabled &&
     selectedThreadStorageKey !== null &&
     ideContextByThread[selectedThreadStorageKey] === true;
 
   const selectedThreadIdeContextEnv = useMemo(() => {
-    if (!selectedThread || newThreadLaunch || !selectedThreadStorageKey) {
+    if (!visibleSelectedThread || newThreadLaunch || !selectedThreadStorageKey) {
       return undefined;
     }
     const enabled = ideContextByThread[selectedThreadStorageKey] === true;
@@ -707,15 +844,15 @@ function App() {
     return buildIdeContextEnv({
       enabled,
       threadKey: selectedThreadStorageKey,
-      providerId: selectedThread.providerId,
-      projectPath: selectedThread.projectPath,
+      providerId: visibleSelectedThread.providerId,
+      projectPath: visibleSelectedThread.projectPath,
       gitBranch,
     });
   }, [
     gitBranchInfo,
     ideContextByThread,
     newThreadLaunch,
-    selectedThread,
+    visibleSelectedThread,
     selectedThreadStorageKey,
   ]);
 
@@ -736,9 +873,27 @@ function App() {
     }
   }, []);
 
+  const loadSophonWorkspacePath = useCallback(async () => {
+    setSophonWorkspacePathError(null);
+    try {
+      const path = await invoke<string>("get_sophon_workspace_path");
+      setSophonWorkspacePath(path);
+      return path;
+    } catch (loadError) {
+      const message =
+        loadError instanceof Error ? loadError.message : String(loadError);
+      setSophonWorkspacePathError(message);
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     void loadOpenTargets();
   }, [loadOpenTargets]);
+
+  useEffect(() => {
+    void loadSophonWorkspacePath();
+  }, [loadSophonWorkspacePath]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -813,6 +968,29 @@ function App() {
       serializeProjectOpenUsageMap(projectOpenUsage),
     );
   }, [projectOpenUsage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(APP_WORKSPACE_MODE_KEY, workspaceMode);
+  }, [workspaceMode]);
+
+  useEffect(() => {
+    if (workspaceMode !== "automatic" || newThreadLaunch !== null) {
+      return;
+    }
+    const nextThreadKey = resolveSelectedThreadKey(automaticModeThreads, selectedThreadKey);
+    if (nextThreadKey && nextThreadKey !== selectedThreadKey) {
+      handleSelectThread(nextThreadKey);
+    }
+  }, [
+    automaticModeThreads,
+    handleSelectThread,
+    newThreadLaunch,
+    selectedThreadKey,
+    workspaceMode,
+  ]);
 
   const loadGitBranch = useCallback(async () => {
     if (!normalizedActiveProjectPath) {
@@ -929,6 +1107,29 @@ function App() {
 
   const { dragRegionRef, windowDragStripHeight } = useWindowDrag();
 
+  const handleSelectThreadView = useCallback(
+    (nextThreadKey: string) => {
+      handleSelectThread(nextThreadKey);
+    },
+    [handleSelectThread],
+  );
+
+  const handleCreateThreadView = useCallback(
+    async (
+      projectPath: string,
+      providerId: ThreadProviderId,
+      profileName: string,
+      launchEnv?: Record<string, string>,
+    ) => {
+      await handleCreateThreadInFolder(projectPath, providerId, profileName, launchEnv);
+    },
+    [handleCreateThreadInFolder],
+  );
+
+  const handleWorkspaceModeChange = useCallback((nextMode: AppWorkspaceMode) => {
+    setWorkspaceMode(nextMode);
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -950,13 +1151,45 @@ function App() {
     return resolveLaunchEnvForProvider(agentRuntimeSettings, providerId);
   };
 
-  const handleAgentRuntimeSettingsChange = (
+  const handleCreateAutomaticThread = useCallback(async () => {
+    const workspacePath = automaticModeWorkspacePath;
+    if (!workspacePath) {
+      setError(sophonWorkspacePathError ?? "Sophon workspace path is not available yet.");
+      return;
+    }
+
+    await handleCreateThreadView(
+      workspacePath,
+      "sophon",
+      resolveProfileNameForProvider("sophon"),
+      resolveLaunchEnv("sophon"),
+    );
+  }, [
+    automaticModeWorkspacePath,
+    handleCreateThreadView,
+    resolveLaunchEnv,
+    resolveProfileNameForProvider,
+    setError,
+    sophonWorkspacePathError,
+  ]);
+
+  const handleAgentRuntimeSettingsChange = async (
     nextSettings: AgentRuntimeSettings,
-  ): string | null => {
+  ): Promise<string | null> => {
     const normalized = normalizeAgentRuntimeSettings(nextSettings);
     const errorMessage = validateAgentRuntimeSettings(normalized);
     if (errorMessage) {
       return errorMessage;
+    }
+
+    if (hasSophonSupplierChanged(agentRuntimeSettings, normalized)) {
+      try {
+        await invoke<SyncSophonAccountResult>("sync_sophon_account_settings", {
+          request: buildSophonSyncRequest(normalized),
+        });
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
     }
 
     if (typeof window !== "undefined") {
@@ -1000,8 +1233,16 @@ function App() {
     }
     const root = document.documentElement;
     root.classList.toggle("dark", resolvedTheme === "dark");
+    root.classList.toggle("brutalism", appSkin === "brutalism");
     root.style.colorScheme = resolvedTheme;
-  }, [resolvedTheme]);
+  }, [resolvedTheme, appSkin]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(APP_SKIN_KEY, appSkin);
+  }, [appSkin]);
 
   return (
     <main className="relative h-full min-h-0 select-none overflow-hidden bg-background">
@@ -1019,30 +1260,38 @@ function App() {
         <Sidebar
           sidebarCollapsed={sidebarCollapsed}
           folderGroups={folderGroups}
+          automaticThreads={automaticModeThreads}
+          workspaceMode={workspaceMode}
+          automaticWorkspacePath={automaticModeWorkspacePath}
+          automaticWorkspacePathError={sophonWorkspacePathError}
           selectedFolderKey={selectedFolderKey}
-          selectedThreadKey={newThreadLaunch ? null : selectedThreadKey}
+          selectedThreadKey={workspaceMode === "automatic" ? visibleSelectedThreadKey : selectedThreadKey}
           loadingThreads={loadingThreads}
           creatingThreadFolderKey={creatingThreadFolderKey}
           error={error}
           newThreadBindingStatus={newThreadBindingStatus}
           hasPendingNewThreadLaunch={newThreadLaunch !== null}
           appTheme={appTheme}
+          appSkin={appSkin}
           activeProviderId={activeProviderId}
           activeProfileName={activeProfileName}
           providerProfiles={providerProfiles}
           agentRuntimeSettings={agentRuntimeSettings}
           onLoadThreads={loadThreads}
-          onSelectThread={handleSelectThread}
+          onSelectThread={handleSelectThreadView}
           onCreateThread={(projectPath, providerId) =>
-            handleCreateThreadInFolder(
+            handleCreateThreadView(
               projectPath,
               providerId,
               resolveProfileNameForProvider(providerId),
               resolveLaunchEnv(providerId),
             )
           }
+          onCreateAutomaticThread={handleCreateAutomaticThread}
+          onWorkspaceModeChange={handleWorkspaceModeChange}
           onAgentRuntimeSettingsChange={handleAgentRuntimeSettingsChange}
           onAppThemeChange={setAppTheme}
+          onAppSkinChange={setAppSkin}
           onClearError={() => setError(null)}
         />
 
@@ -1075,7 +1324,7 @@ function App() {
         >
           <ThreadHeader
             sidebarCollapsed={sidebarCollapsed}
-            selectedThread={selectedThread}
+            selectedThread={visibleSelectedThread}
             newThreadLaunch={newThreadLaunch}
             newThreadBindingStatus={newThreadBindingStatus}
             openTargets={sortedOpenTargets}
@@ -1107,19 +1356,20 @@ function App() {
                         launchEnv: newThreadLaunch.launchEnv,
                         projectPath: newThreadLaunch.projectPath,
                       }
-                    : selectedThread
+                    : visibleSelectedThread
                       ? {
-                          id: selectedThread.id,
-                          providerId: selectedThread.providerId,
-                          profileName: resolveProfileNameForProvider(selectedThread.providerId),
-                          launchEnv: resolveLaunchEnv(selectedThread.providerId),
+                          id: visibleSelectedThread.id,
+                          providerId: visibleSelectedThread.providerId,
+                          profileName: resolveProfileNameForProvider(visibleSelectedThread.providerId),
+                          launchEnv: resolveLaunchEnv(visibleSelectedThread.providerId),
                           ideContextEnv: selectedThreadIdeContextEnv,
-                          projectPath: selectedThread.projectPath,
+                          projectPath: visibleSelectedThread.projectPath,
                         }
                       : null
                 }
                 launchRequest={newThreadLaunch}
                 terminalTheme={resolvedTheme}
+                appSkin={appSkin}
                 onLaunchRequestSettled={handleNewThreadLaunchSettled}
                 onActiveSessionExit={handleEmbeddedTerminalSessionExit}
                 onError={setError}

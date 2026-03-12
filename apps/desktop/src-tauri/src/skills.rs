@@ -378,7 +378,7 @@ pub fn install_skill_from_path_cmd(
         .get_enabled_state()
         .map_err(|e| format!("Failed to get enabled state: {e}"))?;
 
-    for provider in ["claude_code", "codex", "antigravity", "opencode"] {
+    for provider in ["claude_code", "codex", "antigravity", "opencode", "sophon"] {
         if enabled_state.is_enabled_for(provider) {
             let provider_dir = get_provider_skills_dir(provider);
             let dest = provider_dir.join(&metadata.id);
@@ -436,7 +436,7 @@ pub fn install_skill_from_git_cmd(ctx: &SkillsContext, git_url: &str) -> Result<
         .get_enabled_state()
         .map_err(|e| format!("Failed to get enabled state: {e}"))?;
 
-    for provider in ["claude_code", "codex", "antigravity", "opencode"] {
+    for provider in ["claude_code", "codex", "antigravity", "opencode", "sophon"] {
         if enabled_state.is_enabled_for(provider) {
             let provider_dir = get_provider_skills_dir(provider);
             let dest = provider_dir.join(&metadata.id);
@@ -606,7 +606,7 @@ pub fn install_discovered_skill_cmd(
         .get_enabled_state()
         .map_err(|e| format!("Failed to get enabled state: {e}"))?;
 
-    for provider in ["claude_code", "codex", "antigravity", "opencode"] {
+    for provider in ["claude_code", "codex", "antigravity", "opencode", "sophon"] {
         if enabled_state.is_enabled_for(provider) {
             let provider_dir = get_provider_skills_dir(provider);
             let dest = provider_dir.join(&metadata.id);
@@ -904,6 +904,7 @@ fn get_provider_skills_dir(provider: &str) -> PathBuf {
         "codex" => resolve_codex_skills_dir(),
         "antigravity" => resolve_antigravity_skills_dir(),
         "opencode" => home.join(".config").join("opencode").join("skills"),
+        "sophon" => home.join(".sophon").join("skills"),
         _ => home.join(".claude").join("skills"), // Default to claude
     }
 }
@@ -919,6 +920,7 @@ fn get_provider_skills_dirs() -> Vec<(&'static str, PathBuf)> {
             "opencode",
             home.join(".config").join("opencode").join("skills"),
         ),
+        ("sophon", home.join(".sophon").join("skills")),
     ]
 }
 
