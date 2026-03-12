@@ -109,6 +109,12 @@ Current Tauri command surface includes:
   - `bun run typecheck`
   - `bun run test`
 
+## Project Skills
+
+- Claude Code project skills live under `.claude/skills/`.
+- Release publishing skill: `.claude/skills/release-publisher/SKILL.md`
+- When asked to release, publish, package a version, or create a GitHub release with installers, use the `release-publisher` skill.
+
 ## Style & Conventions
 
 - Follow `.editorconfig` (UTF-8, LF, final newline, trim trailing whitespace)

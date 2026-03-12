@@ -101,3 +101,8 @@
   - Why
   - Commands/tests run
   - Screenshots for `apps/desktop` or `apps/mobile` UI changes
+
+## Project Skills
+- Codex project skills live under `.agents/skills/`.
+- Release publishing skill lives at `.agents/skills/release-publisher/SKILL.md`.
+- When asked to release, publish, package a version, or create a GitHub release with desktop installers, use the `release-publisher` skill.

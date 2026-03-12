@@ -1,0 +1,6 @@
+interface:
+  display_name: "Release Publisher"
+  short_description: "Bump versions, build installers, tag, and publish GitHub releases."
+  default_prompt: "Publish a new repository release with macOS and Windows installers."
+policy:
+  allow_implicit_invocation: false
