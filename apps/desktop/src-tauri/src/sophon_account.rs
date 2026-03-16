@@ -119,9 +119,7 @@ fn parse_sophon_account_config(raw: Option<&str>) -> Result<SophonAccountConfig,
         .ok_or_else(|| "Sophon config JSON must be an object.".to_string())?;
     let settings_record = match record.get("settings") {
         Some(Value::Object(object)) => object,
-        Some(_) => {
-            return Err("Sophon config JSON field `settings` must be an object.".to_string())
-        }
+        Some(_) => return Err("Sophon config JSON field `settings` must be an object.".to_string()),
         None => record,
     };
     let auth_patch = match record.get("auth") {
@@ -180,7 +178,10 @@ fn upsert_sophon_settings(
     let mut updated = false;
 
     if let Some(provider) = config.provider.as_deref() {
-        settings.insert("defaultProvider".to_string(), Value::String(provider.to_string()));
+        settings.insert(
+            "defaultProvider".to_string(),
+            Value::String(provider.to_string()),
+        );
         updated = true;
     }
 
@@ -422,7 +423,8 @@ mod tests {
         assert!(saved_settings.contains("\"defaultModel\": \"glm-4.7\""));
         assert!(saved_settings.contains("\"defaultThinkingLevel\": \"medium\""));
 
-        let saved_auth = fs::read_to_string(agent_dir.join("auth.json")).expect("auth should exist");
+        let saved_auth =
+            fs::read_to_string(agent_dir.join("auth.json")).expect("auth should exist");
         assert!(saved_auth.contains("\"zai\""));
         assert!(saved_auth.contains("\"key\": \"secret-zai-key\""));
     }
@@ -452,7 +454,8 @@ mod tests {
         assert!(result.settings_updated);
         assert!(!result.auth_updated);
 
-        let saved_auth = fs::read_to_string(agent_dir.join("auth.json")).expect("auth should exist");
+        let saved_auth =
+            fs::read_to_string(agent_dir.join("auth.json")).expect("auth should exist");
         assert!(saved_auth.contains("\"key\": \"existing\""));
     }
 

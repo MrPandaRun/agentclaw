@@ -202,16 +202,13 @@ impl SophonAdapter {
     fn exec_json<T: for<'de> Deserialize<'de>>(&self, args: &[&str]) -> ProviderResult<T> {
         self.ensure_cli_reachable()?;
         let binary = self.sophon_binary();
-        let output = Command::new(&binary)
-            .args(args)
-            .output()
-            .map_err(|error| {
-                provider_error(
-                    ProviderErrorCode::UpstreamUnavailable,
-                    format!("Failed to execute Sophon CLI ({binary}): {error}"),
-                    true,
-                )
-            })?;
+        let output = Command::new(&binary).args(args).output().map_err(|error| {
+            provider_error(
+                ProviderErrorCode::UpstreamUnavailable,
+                format!("Failed to execute Sophon CLI ({binary}): {error}"),
+                true,
+            )
+        })?;
 
         if !output.status.success() {
             return Err(provider_error(

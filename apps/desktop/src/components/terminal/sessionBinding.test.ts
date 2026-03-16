@@ -24,6 +24,7 @@ function buildSession(): TerminalSessionState {
     sessionId: "embedded-terminal-1",
     command: "codex",
     buffer: "hello",
+    bufferStartOffset: 0,
     running: true,
     hasUserInput: true,
     lastTouchedAt: 1,

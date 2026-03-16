@@ -10,6 +10,11 @@ import type {
 
 import type { TerminalTheme } from "@/types";
 
+import {
+  captureSessionBufferSnapshot,
+  readSessionBufferDelta,
+  type SessionBufferSnapshot,
+} from "./sessionBuffer";
 import type {
   EmbeddedTerminalLaunchSettledPayload,
   SessionLaunchTarget,
@@ -17,8 +22,9 @@ import type {
   TerminalSessionState,
 } from "./types";
 
+const SNAPSHOT_WRITE_CHUNK_SIZE = 16_384;
+
 interface UseTerminalSessionLifecycleProps {
-  appendSessionBuffer: (session: TerminalSessionState, chunk: string) => void;
   closeSessionById: (sessionId: string) => Promise<void>;
   cleanupDormantSessions: (activeThreadKey: string | null) => void;
   fitAddonRef: MutableRefObject<FitAddon | null>;
@@ -51,8 +57,75 @@ function mergeLaunchEnvs(
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
+function focusAndSyncTerminal(
+  terminal: Terminal,
+  fitAddonRef: MutableRefObject<FitAddon | null>,
+  queueRemoteResize: (cols: number, rows: number) => void,
+) {
+  terminal.focus();
+  fitAddonRef.current?.fit();
+  queueRemoteResize(terminal.cols, terminal.rows);
+}
+
+function writeTerminalText(
+  terminal: Terminal,
+  text: string,
+  shouldContinue: () => boolean,
+  onComplete: () => void,
+) {
+  if (!text) {
+    onComplete();
+    return;
+  }
+
+  const writeChunk = (offset: number) => {
+    if (!shouldContinue()) {
+      return;
+    }
+
+    if (offset >= text.length) {
+      onComplete();
+      return;
+    }
+
+    const nextOffset = Math.min(offset + SNAPSHOT_WRITE_CHUNK_SIZE, text.length);
+    terminal.write(text.slice(offset, nextOffset), () => {
+      writeChunk(nextOffset);
+    });
+  };
+
+  writeChunk(0);
+}
+
+function writeBufferedSnapshot(
+  terminal: Terminal,
+  snapshot: SessionBufferSnapshot,
+  readPendingTail: (startOffset: number) => { text: string; endOffset: number },
+  shouldContinue: () => boolean,
+  onComplete: () => void,
+) {
+  const flushPendingTail = (startOffset: number) => {
+    if (!shouldContinue()) {
+      return;
+    }
+
+    const pendingTail = readPendingTail(startOffset);
+    if (!pendingTail.text) {
+      onComplete();
+      return;
+    }
+
+    writeTerminalText(terminal, pendingTail.text, shouldContinue, () => {
+      flushPendingTail(pendingTail.endOffset);
+    });
+  };
+
+  writeTerminalText(terminal, snapshot.text, shouldContinue, () => {
+    flushPendingTail(snapshot.endOffset);
+  });
+}
+
 export function useTerminalSessionLifecycle({
-  appendSessionBuffer,
   closeSessionById,
   cleanupDormantSessions,
   fitAddonRef,
@@ -108,6 +181,9 @@ export function useTerminalSessionLifecycle({
       }
       onError?.(null);
       setLastCommand(null);
+      sessionIdRef.current = null;
+
+      // Reset terminal and clear all buffers before switching
       terminal.reset();
       terminal.clear();
 
@@ -137,17 +213,27 @@ export function useTerminalSessionLifecycle({
 
       const existing = sessionsByThreadRef.current.get(launchTarget.key);
       if (existing && !forceRestart) {
-        const snapshot = existing.buffer;
-        if (snapshot) {
-          terminal.write(snapshot);
-        }
-        sessionIdRef.current = existing.sessionId;
+        const snapshot = captureSessionBufferSnapshot(existing);
+        const shouldContinueRestoring = () =>
+          !cancelled && sessionsByIdRef.current.get(existing.sessionId) === existing;
+
         setLastCommand(existing.command);
-        terminal.focus();
-        queueRemoteResize(terminal.cols, terminal.rows);
-        cleanupDormantSessions(launchTarget.key);
-        setStarting(false);
-        setIsSwitchingThread(false);
+        writeBufferedSnapshot(
+          terminal,
+          snapshot,
+          (startOffset) => readSessionBufferDelta(existing, startOffset),
+          shouldContinueRestoring,
+          () => {
+            if (!shouldContinueRestoring()) {
+              return;
+            }
+            sessionIdRef.current = existing.sessionId;
+            focusAndSyncTerminal(terminal, fitAddonRef, queueRemoteResize);
+            cleanupDormantSessions(launchTarget.key);
+            setStarting(false);
+            setIsSwitchingThread(false);
+          },
+        );
         return;
       }
 
@@ -205,6 +291,7 @@ export function useTerminalSessionLifecycle({
           sessionId: response.sessionId,
           command: response.command,
           buffer: "",
+          bufferStartOffset: 0,
           running: true,
           hasUserInput: false,
           lastTouchedAt: Date.now(),
@@ -214,11 +301,7 @@ export function useTerminalSessionLifecycle({
         sessionsByIdRef.current.set(response.sessionId, session);
         sessionIdRef.current = response.sessionId;
         setLastCommand(response.command);
-        const launchBanner = `Launching: ${response.command}\r\n\r\n`;
-        appendSessionBuffer(session, launchBanner);
-        terminal.write(launchBanner);
-        terminal.focus();
-        queueRemoteResize(terminal.cols, terminal.rows);
+        focusAndSyncTerminal(terminal, fitAddonRef, queueRemoteResize);
         cleanupDormantSessions(launchTarget.key);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -248,7 +331,6 @@ export function useTerminalSessionLifecycle({
         }
         setStarting(false);
         setIsSwitchingThread(false);
-        fitAddonRef.current?.fit();
       }
     };
 
@@ -258,7 +340,6 @@ export function useTerminalSessionLifecycle({
       cancelled = true;
     };
   }, [
-    appendSessionBuffer,
     closeSessionById,
     cleanupDormantSessions,
     fitAddonRef,

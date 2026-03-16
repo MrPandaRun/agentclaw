@@ -50,6 +50,7 @@ export interface TerminalSessionState {
   sessionId: string;
   command: string;
   buffer: string;
+  bufferStartOffset: number;
   running: boolean;
   hasUserInput: boolean;
   lastTouchedAt: number;

@@ -88,7 +88,6 @@ pub struct ThreadSummary {
     pub last_active_at: String,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ResumeThreadRequest {
     pub thread_id: String,
@@ -110,5 +109,4 @@ pub trait ProviderAdapter: Send + Sync {
     ) -> ProviderResult<ProviderHealthCheckResult>;
     fn list_threads(&self, project_path: Option<&str>) -> ProviderResult<Vec<ThreadSummary>>;
     fn resume_thread(&self, request: ResumeThreadRequest) -> ProviderResult<ResumeThreadResult>;
-
 }

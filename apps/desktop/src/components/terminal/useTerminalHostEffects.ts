@@ -57,7 +57,7 @@ export function useTerminalHostEffects({
       allowProposedApi: true,
       customGlyphs: false,
       cursorBlink: true,
-      convertEol: true,
+      convertEol: false,
       drawBoldTextInBrightColors: false,
       minimumContrastRatio: initialThemeRef.current.minimumContrastRatio,
       fontSize: 13,
@@ -65,6 +65,7 @@ export function useTerminalHostEffects({
       letterSpacing: 0,
       fontFamily: "MesloLGS-NF-Regular, Menlo, Monaco, ui-monospace, SFMono-Regular, monospace",
       theme: initialThemeRef.current.xterm,
+      scrollback: 10000,
     });
     const fitAddon = new FitAddon();
     const unicode11Addon = new Unicode11Addon();
@@ -73,9 +74,9 @@ export function useTerminalHostEffects({
     terminal.loadAddon(unicode11Addon);
     terminal.unicode.activeVersion = "11";
     terminal.open(hostRef.current);
+
     tuneHelperTextarea();
     fitAddon.fit();
-    terminal.writeln("AgentClaw embedded terminal ready.");
     terminal.focus();
     const handleHostMouseDown = () => terminal.focus();
     hostRef.current.addEventListener("mousedown", handleHostMouseDown);

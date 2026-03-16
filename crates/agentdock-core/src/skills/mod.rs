@@ -345,7 +345,10 @@ pub fn parse_skill_metadata(skill_dir: &Path) -> Result<SkillMetadata, SkillErro
     )))
 }
 
-fn parse_skill_md_metadata(skill_dir: &Path, skill_md_path: &Path) -> Result<SkillMetadata, SkillError> {
+fn parse_skill_md_metadata(
+    skill_dir: &Path,
+    skill_md_path: &Path,
+) -> Result<SkillMetadata, SkillError> {
     let content = std::fs::read_to_string(skill_md_path)?;
     let content = content.trim_start_matches('\u{feff}');
 
@@ -914,7 +917,8 @@ Content
     #[test]
     fn parse_skill_metadata_returns_error_when_metadata_missing() {
         let temp_dir = tempfile::tempdir().expect("temp dir should be created");
-        let error = parse_skill_metadata(temp_dir.path()).expect_err("missing metadata should fail");
+        let error =
+            parse_skill_metadata(temp_dir.path()).expect_err("missing metadata should fail");
         match error {
             SkillError::InvalidMetadata(message) => {
                 assert!(message.contains("skill.json or SKILL.md not found"));

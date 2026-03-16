@@ -7,32 +7,29 @@ use crate::payloads::{
     CloseEmbeddedTerminalRequest, CodexThreadRuntimeStatePayload, DeleteMcpServerRequest,
     DiscoverSkillInstallProgressPayload, GetClaudeThreadRuntimeStateRequest,
     GetCodexThreadRuntimeStateRequest, GetOpenCodeThreadRuntimeStateRequest,
-    GetSophonThreadRuntimeStateRequest,
-    GetProjectGitBranchRequest, InstallDiscoveredSkillRequest, InstallSkillFromGitRequest,
-    InstallSkillFromPathRequest, McpConnectionTestResultPayload, McpOperationLogPayload,
-    McpServerPayload, OpenCodeThreadRuntimeStatePayload, OpenNewThreadInTerminalRequest,
+    GetProjectGitBranchRequest, GetSophonThreadRuntimeStateRequest, InstallDiscoveredSkillRequest,
+    InstallSkillFromGitRequest, InstallSkillFromPathRequest, InstallSophonCliPayload,
+    McpConnectionTestResultPayload, McpOperationLogPayload, McpServerPayload,
+    OpenCodeThreadRuntimeStatePayload, OpenNewThreadInTerminalRequest,
     OpenProjectWithTargetRequest, OpenProjectWithTargetResponse, OpenTargetStatusPayload,
     OpenThreadInHappyRequest, OpenThreadInTerminalRequest, OpenThreadInTerminalResponse,
     ProjectGitBranchPayload, ProviderInstallStatusPayload, RemoveSkillRepoRequest,
     ResizeEmbeddedTerminalRequest, SaveMcpServerRequest, SaveMcpServerResponsePayload,
-    InstallSophonCliPayload, SkillPayload, SkillRepoPayload, SophonConductorSessionPayload,
-    SophonThreadRuntimeStatePayload, StartEmbeddedTerminalRequest,
-    StartEmbeddedTerminalResponse, StartNewEmbeddedTerminalRequest,
-    StartSophonConductorSessionRequest, SyncMcpConfigsRequest,
-    SyncMcpConfigsResponsePayload, TestMcpConnectionRequest, ThreadSummaryPayload,
-    SyncSophonAccountSettingsPayload, SyncSophonAccountSettingsRequest,
-    ToggleMcpServerEnabledRequest,
-    ToggleSkillEnabledForProviderRequest, ToggleSkillEnabledRequest, UninstallSkillRequest,
-    WriteEmbeddedTerminalInputRequest,
+    SkillPayload, SkillRepoPayload, SophonConductorSessionPayload, SophonThreadRuntimeStatePayload,
+    StartEmbeddedTerminalRequest, StartEmbeddedTerminalResponse, StartNewEmbeddedTerminalRequest,
+    StartSophonConductorSessionRequest, SyncMcpConfigsRequest, SyncMcpConfigsResponsePayload,
+    SyncSophonAccountSettingsPayload, SyncSophonAccountSettingsRequest, TestMcpConnectionRequest,
+    ThreadSummaryPayload, ToggleMcpServerEnabledRequest, ToggleSkillEnabledForProviderRequest,
+    ToggleSkillEnabledRequest, UninstallSkillRequest, WriteEmbeddedTerminalInputRequest,
 };
 use crate::provider_id::parse_provider_id;
 use crate::skills::{DiscoverableSkill, SkillsContext};
+use crate::sophon_account;
+use crate::sophon_install;
 use crate::{
     ccswitch, mcp, open_targets, payloads::ImportProviderSkillsRequest,
     payloads::ProviderSkillPayload, provider_health, skills, terminal, threads,
 };
-use crate::sophon_install;
-use crate::sophon_account;
 
 #[tauri::command]
 pub async fn list_threads(
@@ -56,7 +53,8 @@ pub async fn list_provider_install_statuses(
 
 #[tauri::command]
 pub fn get_sophon_workspace_path() -> Result<String, String> {
-    let home_dir = dirs::home_dir().ok_or_else(|| "Failed to resolve home directory".to_string())?;
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| "Failed to resolve home directory".to_string())?;
     Ok(home_dir
         .join(".sophon")
         .join("workspace")
@@ -89,7 +87,8 @@ pub async fn sync_sophon_account_settings(
 }
 
 #[tauri::command]
-pub async fn list_sophon_conductor_sessions() -> Result<Vec<SophonConductorSessionPayload>, String> {
+pub async fn list_sophon_conductor_sessions() -> Result<Vec<SophonConductorSessionPayload>, String>
+{
     tauri::async_runtime::spawn_blocking(move || {
         SophonAdapter::new()
             .list_conductor_sessions()

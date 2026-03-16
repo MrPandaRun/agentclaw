@@ -280,8 +280,18 @@ mod tests {
     #[test]
     fn dedupe_thread_summaries_keeps_latest_record_for_same_provider_and_id() {
         let threads = vec![
-            build_thread("claude_code", "session-1", "1700000000000", "/workspace/old"),
-            build_thread("claude_code", "session-1", "1700000005000", "/workspace/new"),
+            build_thread(
+                "claude_code",
+                "session-1",
+                "1700000000000",
+                "/workspace/old",
+            ),
+            build_thread(
+                "claude_code",
+                "session-1",
+                "1700000005000",
+                "/workspace/new",
+            ),
             build_thread("codex", "session-1", "1700000001000", "/workspace/codex"),
         ];
 

@@ -26,6 +26,116 @@ struct EmbeddedTerminalSession {
 static EMBEDDED_TERMINAL_SESSIONS: OnceLock<Mutex<HashMap<String, Arc<EmbeddedTerminalSession>>>> =
     OnceLock::new();
 static EMBEDDED_TERMINAL_COUNTER: AtomicU64 = AtomicU64::new(1);
+const SYNC_OUTPUT_START: &str = "\u{001b}[?2026h";
+const SYNC_OUTPUT_END: &str = "\u{001b}[?2026l";
+
+#[derive(Default)]
+struct TerminalOutputBatcher {
+    carry: String,
+    sync_frame: String,
+    in_sync_frame: bool,
+}
+
+impl TerminalOutputBatcher {
+    fn push(&mut self, chunk: &str) -> Vec<String> {
+        if chunk.is_empty() {
+            return Vec::new();
+        }
+
+        let mut source = String::new();
+        source.push_str(&self.carry);
+        source.push_str(chunk);
+        self.carry.clear();
+
+        let mut emitted = Vec::new();
+        let mut cursor = 0;
+
+        while cursor < source.len() {
+            if self.in_sync_frame {
+                if let Some(relative_end) = source[cursor..].find(SYNC_OUTPUT_END) {
+                    let end = cursor + relative_end + SYNC_OUTPUT_END.len();
+                    self.sync_frame.push_str(&source[cursor..end]);
+                    emitted.push(std::mem::take(&mut self.sync_frame));
+                    self.in_sync_frame = false;
+                    cursor = end;
+                    continue;
+                }
+
+                let suffix_len = trailing_marker_prefix_len(&source[cursor..], SYNC_OUTPUT_END);
+                let safe_end = source.len().saturating_sub(suffix_len);
+                self.sync_frame.push_str(&source[cursor..safe_end]);
+                self.carry.push_str(&source[safe_end..]);
+                return emitted;
+            }
+
+            if let Some(relative_start) = source[cursor..].find(SYNC_OUTPUT_START) {
+                let start = cursor + relative_start;
+                if start > cursor {
+                    emitted.push(source[cursor..start].to_string());
+                }
+                self.in_sync_frame = true;
+                self.sync_frame
+                    .push_str(&source[start..start + SYNC_OUTPUT_START.len()]);
+                cursor = start + SYNC_OUTPUT_START.len();
+                continue;
+            }
+
+            let remaining = &source[cursor..];
+            let suffix_len = trailing_marker_prefix_len(remaining, SYNC_OUTPUT_START)
+                .max(trailing_marker_prefix_len(remaining, SYNC_OUTPUT_END));
+            let safe_end = source.len().saturating_sub(suffix_len);
+            if safe_end > cursor {
+                emitted.push(source[cursor..safe_end].to_string());
+            }
+            self.carry.push_str(&source[safe_end..]);
+            return emitted;
+        }
+
+        emitted
+    }
+
+    fn flush_pending(&mut self) -> Option<String> {
+        let mut pending = String::new();
+
+        if self.in_sync_frame {
+            pending.push_str(&self.sync_frame);
+            self.sync_frame.clear();
+            self.in_sync_frame = false;
+        }
+
+        if !self.carry.is_empty() {
+            pending.push_str(&self.carry);
+            self.carry.clear();
+        }
+
+        if pending.is_empty() {
+            None
+        } else {
+            Some(pending)
+        }
+    }
+}
+
+fn trailing_marker_prefix_len(source: &str, marker: &str) -> usize {
+    let max_len = source.len().min(marker.len().saturating_sub(1));
+    for len in (1..=max_len).rev() {
+        if source.ends_with(&marker[..len]) {
+            return len;
+        }
+    }
+    0
+}
+
+fn emit_terminal_output(app: &tauri::AppHandle, session_id: &str, data: String) {
+    if data.is_empty() {
+        return;
+    }
+    let payload = EmbeddedTerminalOutputPayload {
+        session_id: session_id.to_string(),
+        data,
+    };
+    let _ = app.emit("embedded-terminal-output", payload);
+}
 
 pub fn open_thread_in_terminal(
     provider_id: ProviderId,
@@ -260,6 +370,7 @@ fn create_embedded_session(
     cmd.env("COLORFGBG", colorfgbg_for_theme(terminal_theme));
     cmd.env("COLUMNS", cols.to_string());
     cmd.env("LINES", rows.to_string());
+    cmd.env("PI_CLEAR_ON_SHRINK", "1");
 
     let child = pair
         .slave
@@ -305,7 +416,7 @@ fn embedded_term_program() -> &'static str {
 
 #[cfg(target_os = "macos")]
 fn embedded_term_program() -> &'static str {
-    "Apple_Terminal"
+    "AgentClaw_Embedded"
 }
 
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
@@ -328,6 +439,7 @@ fn spawn_terminal_output_reader<R: Read + Send + 'static>(
     thread::spawn(move || {
         let mut buffer = [0_u8; 8192];
         let mut pending = Vec::new();
+        let mut batcher = TerminalOutputBatcher::default();
         loop {
             let read = match stream.read(&mut buffer) {
                 Ok(size) => size,
@@ -336,14 +448,13 @@ fn spawn_terminal_output_reader<R: Read + Send + 'static>(
             if read == 0 {
                 if !pending.is_empty() {
                     let data = String::from_utf8_lossy(&pending).to_string();
-                    if !data.is_empty() {
-                        let payload = EmbeddedTerminalOutputPayload {
-                            session_id: session_id.clone(),
-                            data,
-                        };
-                        let _ = app.emit("embedded-terminal-output", payload);
+                    for chunk in batcher.push(&data) {
+                        emit_terminal_output(&app, &session_id, chunk);
                     }
                     pending.clear();
+                }
+                if let Some(chunk) = batcher.flush_pending() {
+                    emit_terminal_output(&app, &session_id, chunk);
                 }
                 break;
             }
@@ -353,12 +464,8 @@ fn spawn_terminal_output_reader<R: Read + Send + 'static>(
             loop {
                 match std::str::from_utf8(&pending) {
                     Ok(text) => {
-                        if !text.is_empty() {
-                            let payload = EmbeddedTerminalOutputPayload {
-                                session_id: session_id.clone(),
-                                data: text.to_string(),
-                            };
-                            let _ = app.emit("embedded-terminal-output", payload);
+                        for chunk in batcher.push(text) {
+                            emit_terminal_output(&app, &session_id, chunk);
                         }
                         pending.clear();
                         break;
@@ -367,11 +474,10 @@ fn spawn_terminal_output_reader<R: Read + Send + 'static>(
                         let valid_up_to = error.valid_up_to();
                         if valid_up_to > 0 {
                             let valid = &pending[..valid_up_to];
-                            let payload = EmbeddedTerminalOutputPayload {
-                                session_id: session_id.clone(),
-                                data: String::from_utf8_lossy(valid).to_string(),
-                            };
-                            let _ = app.emit("embedded-terminal-output", payload);
+                            let data = String::from_utf8_lossy(valid).to_string();
+                            for chunk in batcher.push(&data) {
+                                emit_terminal_output(&app, &session_id, chunk);
+                            }
                         }
 
                         match error.error_len() {
@@ -379,11 +485,9 @@ fn spawn_terminal_output_reader<R: Read + Send + 'static>(
                                 // True invalid bytes: skip the offending sequence and continue.
                                 let drain_to = valid_up_to + error_len;
                                 pending.drain(..drain_to);
-                                let payload = EmbeddedTerminalOutputPayload {
-                                    session_id: session_id.clone(),
-                                    data: "\u{FFFD}".to_string(),
-                                };
-                                let _ = app.emit("embedded-terminal-output", payload);
+                                for chunk in batcher.push("\u{FFFD}") {
+                                    emit_terminal_output(&app, &session_id, chunk);
+                                }
                                 if pending.is_empty() {
                                     break;
                                 }
@@ -704,7 +808,7 @@ mod tests {
     use super::{
         build_happy_command_from_parts, build_new_thread_command_from_parts,
         build_resume_command_from_parts, clamp_terminal_cols, clamp_terminal_rows,
-        format_executable_command, resolve_provider_command, shell_quote,
+        format_executable_command, resolve_provider_command, shell_quote, TerminalOutputBatcher,
     };
 
     #[test]
@@ -882,5 +986,48 @@ mod tests {
         assert_eq!(clamp_terminal_rows(None), 36);
         assert_eq!(clamp_terminal_rows(Some(5)), 36);
         assert_eq!(clamp_terminal_rows(Some(200)), 120);
+    }
+
+    #[test]
+    fn terminal_output_batcher_emits_plain_text_immediately() {
+        let mut batcher = TerminalOutputBatcher::default();
+        assert_eq!(batcher.push("hello"), vec!["hello".to_string()]);
+        assert_eq!(batcher.flush_pending(), None);
+    }
+
+    #[test]
+    fn terminal_output_batcher_batches_synchronized_output_until_end_marker() {
+        let mut batcher = TerminalOutputBatcher::default();
+        assert!(batcher.push("\u{001b}[?2026hpartial").is_empty());
+        assert_eq!(
+            batcher.push(" frame\u{001b}[?2026l"),
+            vec!["\u{001b}[?2026hpartial frame\u{001b}[?2026l".to_string()]
+        );
+        assert_eq!(batcher.flush_pending(), None);
+    }
+
+    #[test]
+    fn terminal_output_batcher_handles_split_markers_across_chunks() {
+        let mut batcher = TerminalOutputBatcher::default();
+        assert_eq!(batcher.push("a\u{001b}[?20"), vec!["a".to_string()]);
+        assert!(batcher.push("26hmid").is_empty());
+        assert_eq!(
+            batcher.push("dle\u{001b}[?2026lz"),
+            vec![
+                "\u{001b}[?2026hmiddle\u{001b}[?2026l".to_string(),
+                "z".to_string(),
+            ]
+        );
+        assert_eq!(batcher.flush_pending(), None);
+    }
+
+    #[test]
+    fn terminal_output_batcher_flushes_unfinished_sync_frame_on_exit() {
+        let mut batcher = TerminalOutputBatcher::default();
+        assert!(batcher.push("\u{001b}[?2026hunfinished").is_empty());
+        assert_eq!(
+            batcher.flush_pending(),
+            Some("\u{001b}[?2026hunfinished".to_string())
+        );
     }
 }

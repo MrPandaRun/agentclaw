@@ -46,9 +46,7 @@ pub fn ensure_managed_sophon_binary(app_data_dir: &Path) -> Result<Option<PathBu
     Ok(Some(binary_path))
 }
 
-pub fn install_sophon_cli_cmd(
-    app: &tauri::AppHandle,
-) -> Result<InstallSophonCliResponse, String> {
+pub fn install_sophon_cli_cmd(app: &tauri::AppHandle) -> Result<InstallSophonCliResponse, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -63,7 +61,9 @@ pub fn install_sophon_cli_cmd(
         ));
     }
     if !command_available("bun") {
-        return Err("Bun is not available in PATH. Install Bun and retry Sophon installation.".to_string());
+        return Err(
+            "Bun is not available in PATH. Install Bun and retry Sophon installation.".to_string(),
+        );
     }
 
     build_managed_sophon_binary(&source_path, &binary_path)?;
@@ -85,8 +85,7 @@ fn managed_sophon_binary_path(app_data_dir: &Path) -> PathBuf {
 }
 
 fn sophon_cli_source_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../packages/sophon-cli/src/index.ts")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../packages/sophon-cli/src/index.ts")
 }
 
 fn sophon_cli_package_root() -> PathBuf {
@@ -153,7 +152,10 @@ fn ensure_managed_sophon_runtime_assets(app_data_dir: &Path) -> Result<(), Strin
     if sophon_package_json.exists() {
         copy_file_if_exists(&sophon_package_json, &runtime_dir.join("package.json"))?;
     } else {
-        copy_file_if_exists(&pi_root.join("package.json"), &runtime_dir.join("package.json"))?;
+        copy_file_if_exists(
+            &pi_root.join("package.json"),
+            &runtime_dir.join("package.json"),
+        )?;
     }
     copy_file_if_exists(&pi_root.join("README.md"), &runtime_dir.join("README.md"))?;
     copy_file_if_exists(
@@ -221,7 +223,12 @@ fn read_modified_time(path: &Path) -> Result<SystemTime, String> {
     std::fs::metadata(path)
         .map_err(|error| format!("Failed to read metadata for {}: {error}", path.display()))?
         .modified()
-        .map_err(|error| format!("Failed to read modified time for {}: {error}", path.display()))
+        .map_err(|error| {
+            format!(
+                "Failed to read modified time for {}: {error}",
+                path.display()
+            )
+        })
 }
 
 fn copy_dir_contents(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
@@ -321,11 +328,9 @@ mod tests {
         let input_path = temp_dir.path().join("input.ts");
         fs::write(&input_path, "source").expect("input file should be written");
 
-        let needs_refresh = binary_needs_refresh(
-            &temp_dir.path().join("missing-binary"),
-            &[input_path],
-        )
-        .expect("refresh check should succeed");
+        let needs_refresh =
+            binary_needs_refresh(&temp_dir.path().join("missing-binary"), &[input_path])
+                .expect("refresh check should succeed");
 
         assert!(needs_refresh);
     }
@@ -340,8 +345,8 @@ mod tests {
         sleep(Duration::from_millis(1100));
         fs::write(&binary_path, "binary").expect("binary file should be written");
 
-        let needs_refresh =
-            binary_needs_refresh(&binary_path, &[input_path]).expect("refresh check should succeed");
+        let needs_refresh = binary_needs_refresh(&binary_path, &[input_path])
+            .expect("refresh check should succeed");
 
         assert!(!needs_refresh);
     }
@@ -356,8 +361,8 @@ mod tests {
         sleep(Duration::from_millis(1100));
         fs::write(&input_path, "source").expect("input file should be written");
 
-        let needs_refresh =
-            binary_needs_refresh(&binary_path, &[input_path]).expect("refresh check should succeed");
+        let needs_refresh = binary_needs_refresh(&binary_path, &[input_path])
+            .expect("refresh check should succeed");
 
         assert!(needs_refresh);
     }

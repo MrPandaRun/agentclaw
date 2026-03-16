@@ -23,6 +23,7 @@ import {
   rebindPendingNewThreadSession,
   type PendingNewLaunchBinding,
 } from "./sessionBinding";
+import { appendToSessionBuffer } from "./sessionBuffer";
 import { useTerminalHostEffects } from "./useTerminalHostEffects";
 import { useTerminalSessionLifecycle } from "./useTerminalSessionLifecycle";
 
@@ -307,14 +308,7 @@ export function useEmbeddedTerminalController({
   );
 
   const appendSessionBuffer = useCallback((session: TerminalSessionState, chunk: string) => {
-    if (!chunk) {
-      return;
-    }
-    session.lastTouchedAt = Date.now();
-    session.buffer += chunk;
-    if (session.buffer.length > SESSION_BUFFER_MAX_CHARS) {
-      session.buffer = session.buffer.slice(-SESSION_BUFFER_MAX_CHARS);
-    }
+    appendToSessionBuffer(session, chunk, SESSION_BUFFER_MAX_CHARS);
   }, []);
 
   const closeSessionById = useCallback(async (sessionId: string) => {
@@ -506,7 +500,6 @@ export function useEmbeddedTerminalController({
   });
 
   useTerminalSessionLifecycle({
-    appendSessionBuffer,
     closeSessionById,
     cleanupDormantSessions,
     fitAddonRef,

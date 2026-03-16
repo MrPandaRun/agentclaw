@@ -2170,8 +2170,8 @@ fn run_http_connection_test(validated: &ValidatedTestRequest) -> (bool, Option<S
     let headers_map = decode_object_string_map(&validated.headers_json);
     let env_map = decode_object_string_map(&validated.env_json);
     let args_values = decode_string_array(&validated.args_json);
-    let extra_map = serde_json::from_str::<Map<String, Value>>(&validated.extra_json)
-        .unwrap_or_default();
+    let extra_map =
+        serde_json::from_str::<Map<String, Value>>(&validated.extra_json).unwrap_or_default();
 
     let mut request = client.get(&validated.target);
 
@@ -2426,12 +2426,13 @@ fn build_unified_server_spec(server: &McpServer) -> Result<Value, String> {
         ));
     }
 
-    let extra = serde_json::from_str::<Map<String, Value>>(&server.extra_json).map_err(|error| {
-        format!(
-            "Failed to parse extra JSON for MCP '{}': {error}",
-            server.name
-        )
-    })?;
+    let extra =
+        serde_json::from_str::<Map<String, Value>>(&server.extra_json).map_err(|error| {
+            format!(
+                "Failed to parse extra JSON for MCP '{}': {error}",
+                server.name
+            )
+        })?;
 
     let mut spec = extra;
     spec.insert("type".to_string(), Value::String(transport.clone()));
