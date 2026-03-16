@@ -1,6 +1,6 @@
 [package]
 name = "agentdock-desktop"
-version = "1.3.2"
+version = "1.3.3"
 description = "AgentClaw desktop shell"
 authors = ["AgentClaw"]
 edition = "2021"
